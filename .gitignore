@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# Secrets — never commit an API key
+.env
+.env.*
+!.env.example
+server/.env
+
+# Raw corpora used only to regenerate src/data/generated (see scripts/fetch-data.sh).
+# The generated bundles ARE committed so the app runs straight after clone.
+data-raw/

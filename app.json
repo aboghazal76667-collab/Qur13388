@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Quran Intelligence",
+    "slug": "quran-intelligence",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "quranintel",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1512"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quranintelligence.app"
+    },
+    "android": {
+      "package": "com.quranintelligence.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1512",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
