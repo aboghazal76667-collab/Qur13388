@@ -37,3 +37,6 @@ server/.env
 # Raw corpora used only to regenerate src/data/generated (see scripts/fetch-data.sh).
 # The generated bundles ARE committed so the app runs straight after clone.
 data-raw/
+
+# Standalone web build output (npm run build:web)
+.web-build/

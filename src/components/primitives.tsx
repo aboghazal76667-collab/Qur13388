@@ -294,6 +294,9 @@ export function Button({ label, onPress, variant = 'primary', disabled, loading,
           borderRadius: radii.md,
           alignItems: 'center',
           justifyContent: 'center',
+          // Lets a `flex: 1` button shrink inside a non-wrapping row instead of
+          // forcing the row wider than the screen.
+          minWidth: 0,
           backgroundColor: isPrimary ? palette.accent : isGhost ? 'transparent' : palette.surfaceAlt,
           borderWidth: isGhost ? StyleSheet.hairlineWidth : 0,
           borderColor: palette.border,

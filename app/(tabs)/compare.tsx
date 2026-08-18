@@ -42,6 +42,10 @@ export default function CompareTab() {
 
   const inputStyle = {
     flex: 1,
+    // Flex items default to `min-width: auto`, so a text input refuses to
+    // shrink below its placeholder's intrinsic width and pushes the row past
+    // both screen edges. Allowing it to shrink is what keeps the pair on screen.
+    minWidth: 0,
     backgroundColor: palette.surfaceAlt,
     borderRadius: radii.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -241,7 +245,7 @@ export default function CompareTab() {
 function ProfileColumn({ profile }: { profile: TermProfile }) {
   const { spacing } = useTheme();
   return (
-    <Card style={{ flex: 1 }}>
+    <Card style={{ flex: 1, minWidth: 0 }}>
       <AppText variant="body" weight="bold" align="center">
         {profile.term}
       </AppText>

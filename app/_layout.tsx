@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { I18nManager, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,10 +8,22 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
 
-// Arabic-first: force RTL so every default alignment, drawer edge and back
-// gesture follows the reading direction rather than being flipped per-view.
-I18nManager.allowRTL(true);
-I18nManager.forceRTL(true);
+/**
+ * Direction is expressed per-view (`row-reverse`, `textAlign: 'right'`,
+ * `writingDirection: 'rtl'`), deliberately, rather than through
+ * `I18nManager.forceRTL`.
+ *
+ * forceRTL flips the meaning of every flex direction in the tree, so the same
+ * component would lay out one way and then the opposite way once the flag took
+ * effect. On iOS the flag only applies after a native restart, which Expo Go
+ * does not perform on reload — the first launch would render one direction and
+ * every reload after it the other. React Native Web ignores the call entirely
+ * and reports isRTL as false, so a forceRTL layout would also disagree with
+ * itself between phone and browser.
+ *
+ * Being explicit costs a few extra style properties and buys identical layout
+ * on every platform, on every launch.
+ */
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

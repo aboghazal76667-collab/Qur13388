@@ -14,11 +14,19 @@ interface SettingsState {
   reset: () => void;
 }
 
+/**
+ * A standalone single-file build has no dev server to derive a backend address
+ * from, so attempting the call only produces a connection error and a notice
+ * the reader can do nothing about. It ships with AI off; the setting is still
+ * there to switch on against a reachable server.
+ */
+const IS_STANDALONE = process.env.EXPO_PUBLIC_STANDALONE === '1';
+
 const DEFAULTS: Settings = {
   theme: 'system',
   quranFontScale: 1,
   apiBaseUrl: '',
-  aiEnabled: true,
+  aiEnabled: !IS_STANDALONE,
   showTranslationHints: true,
 };
 
