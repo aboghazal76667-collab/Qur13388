@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Project Memory",
+    "slug": "project-memory",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "projectmemory",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF6F1"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.projectmemory.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Project Memory needs access to your photos so you can add them to your child's memories. Photos stay private to your family.",
+        "NSCameraUsageDescription": "Project Memory uses the camera so you can capture a memory right now."
+      }
+    },
+    "android": {
+      "package": "com.projectmemory.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FAF6F1",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Project Memory needs access to your photos so you can add them to your child's memories."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "backendMode": "local"
+    }
+  }
+}

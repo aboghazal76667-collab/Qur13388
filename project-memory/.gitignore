@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+.expo-export/
+.web-build/
+expo-env.d.ts
+.metro-health-check*
+npm-debug.*
+.DS_Store
+
+# Secrets — never commit real keys
+.env
+.env.*
+!.env.example
+server/.env
