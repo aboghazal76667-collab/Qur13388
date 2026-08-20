@@ -11,9 +11,10 @@ import { log } from '@/lib/log';
 import { useTheme } from '@/theme';
 import { analytics } from '@/services/analytics';
 import { isAwaitingResult, isFailed } from '@/services/threeD/pipeline';
-import { FigurinePreview } from '@/components/FigurinePreview';
+import { ModelViewer } from '@/components/ModelViewer';
+import { useModelData } from '@/features/threeD/useModelData';
 import { GenerationStages } from '@/features/threeD/GenerationStages';
-import { Banner, Button, Card, Row, RowGroup, Screen, ScreenHeader, Text } from '@/ui';
+import { Banner, Button, Row, RowGroup, Screen, ScreenHeader, Text } from '@/ui';
 
 /** How often we ask for progress while a job is running. */
 const POLL_INTERVAL_MS = 1200;
@@ -38,6 +39,7 @@ export default function ThreeDJobScreen() {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const modelData = useModelData(model);
 
   const stop = useCallback(() => {
     if (timer.current) {
@@ -173,8 +175,6 @@ export default function ThreeDJobScreen() {
 
   /* ------------------------------------------------------------- result */
 
-  const isDemo = model.meta.previewKind === 'procedural';
-
   return (
     <Screen
       footer={
@@ -187,30 +187,47 @@ export default function ThreeDJobScreen() {
       <ScreenHeader title={t.threeD.doneTitle} subtitle={t.threeD.doneBody} />
 
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
-        <FigurinePreview seed={String(model.meta.seed ?? model.id)} />
+        {/* The actual model this request produced, rendered with a real
+            renderer. When no provider file exists it is the bundled stand-in —
+            same viewer, and labelled so nobody mistakes it for their child. */}
+        <ModelViewer data={modelData.data} loading={modelData.loading} />
 
-        {isDemo ? <Banner tone="info" title={t.threeD.demoBadge} body={t.threeD.demoExplainer} /> : null}
+        {modelData.source === 'demo' ? (
+          <Banner tone="info" title={t.threeD.demoModelBadge} body={t.threeD.demoModelExplainer} />
+        ) : null}
 
+        {/* A polygon count means nothing to a parent. These say what they
+            would actually want to know, and the print line says plainly that
+            nothing has been checked rather than implying it passed. */}
         <RowGroup title={t.threeD.preview}>
-          <Row label={t.threeD.sourcePhotos} value={formatNumber(job.sourceAssetIds.length)} icon="images-outline" />
-          {model.polycount ? (
-            <Row label="Detail" value={formatNumber(model.polycount)} icon="grid-outline" />
-          ) : null}
-          {model.printability?.estimatedHeightMm ? (
-            <Row
-              label="Height"
-              value={`${formatNumber(model.printability.estimatedHeightMm)} mm`}
-              icon="resize-outline"
-            />
-          ) : null}
+          <Row
+            label={t.threeD.sourcePhotos}
+            value={formatNumber(job.sourceAssetIds.length)}
+            icon="images-outline"
+          />
+          <Row
+            label={t.threeD.modelQuality}
+            value={
+              (model.polycount ?? 0) >= 50_000
+                ? t.threeD.modelQualityHigh
+                : t.threeD.modelQualityStandard
+            }
+            icon="diamond-outline"
+          />
+          <Row
+            label={t.threeD.figurineSize}
+            value={t.threeD.sizeNotChosen}
+            icon="resize-outline"
+          />
+          <Row
+            label={t.threeD.printCheck}
+            value={model.isPrintReady ? t.common.done : t.threeD.printCheckNotDone}
+            icon="cube-outline"
+          />
         </RowGroup>
 
-        {model.printability && !model.isPrintReady ? (
-          <Card>
-            <Text variant="caption" color="textMuted">
-              {t.threeD.qualityGateBody}
-            </Text>
-          </Card>
+        {!model.isPrintReady ? (
+          <Banner tone="info" body={t.threeD.printCheckExplain} />
         ) : null}
       </View>
     </Screen>

@@ -45,7 +45,7 @@ export class Mock3DProvider implements ThreeDProvider {
     typicalDurationSeconds: DURATION_MS / 1000,
     approxCostUsd: 0,
     formats: ['glb'],
-    printability: true,
+    printability: false,
   };
 
   private jobs = new Map<string, MockJob>();
@@ -131,13 +131,16 @@ export class Mock3DProvider implements ThreeDProvider {
   }
 
   async analyzePrintability(): Promise<PrintabilityAssessment> {
+    // Even the mock refuses to claim a model is printable. Fabricating a green
+    // tick here would put a fake check in front of a physical product, which
+    // is the one place a mock must not pretend.
     return {
-      isWatertight: true,
+      isWatertight: false,
       hasThinFeatures: false,
-      estimatedHeightMm: 110,
-      wallThicknessMm: 2.4,
-      warnings: [],
-      score: 90,
+      estimatedHeightMm: null,
+      wallThicknessMm: null,
+      warnings: ['printability_not_assessed'],
+      score: 0,
     };
   }
 }

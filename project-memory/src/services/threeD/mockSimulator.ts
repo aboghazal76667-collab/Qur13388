@@ -96,20 +96,23 @@ export function simulate(job: Pick<ThreeDJob, 'id' | 'createdAt' | 'attempt'>, n
   return { status: 'approved', progress: 1, done: true };
 }
 
-/** A plausible printability report, derived from the job id so it is stable. */
-export function mockPrintability(jobId: string): PrintabilityReport {
-  const thin = seedUnit(jobId, 'thin') < 0.3;
-  const height = 90 + Math.round(seedUnit(jobId, 'height') * 40);
-  const warnings: string[] = [];
-  if (thin) warnings.push('thin_features_at_wrists');
-
+/**
+ * Printability is deliberately NOT simulated.
+ *
+ * An earlier version invented a watertight flag, a wall thickness and a score,
+ * which put a fabricated safety check in front of a physical product. No
+ * provider we use assesses printability and we have not written our own pass,
+ * so the honest answer is that nothing has been checked — and human QA stays
+ * the gate before anything is manufactured.
+ */
+export function unassessedPrintability(): PrintabilityReport {
   return {
-    isWatertight: true,
-    hasThinFeatures: thin,
-    estimatedHeightMm: height,
-    wallThicknessMm: thin ? 1.1 : 2.4,
-    warnings,
-    score: thin ? 72 : 91,
+    isWatertight: false,
+    hasThinFeatures: false,
+    estimatedHeightMm: null,
+    wallThicknessMm: null,
+    warnings: ['printability_not_assessed'],
+    score: 0,
   };
 }
 

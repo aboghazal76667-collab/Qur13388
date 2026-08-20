@@ -118,6 +118,76 @@ async function signSourceImages(
   return images;
 }
 
+/**
+ * Copies a finished model out of the provider and into our own storage.
+ *
+ * Provider URLs expire, often within hours. A family archive that keeps a link
+ * instead of the file has kept nothing — in a year the memory would still be
+ * on the timeline with a dead model behind it. So the bytes are fetched once,
+ * written into the same private bucket as the photographs, and recorded as an
+ * asset like everything else the family owns.
+ *
+ * Returns null on failure. A model we could not copy is a job we do not mark
+ * finished, rather than one that appears to have worked.
+ */
+async function storeModelAsset(
+  client: SupabaseClient,
+  job: { id: string; family_id: string; child_id: string; memory_id: string },
+  modelUrl: string,
+  format: string,
+): Promise<{ assetId: string; byteSize: number } | null> {
+  try {
+    const response = await fetch(modelUrl);
+    if (!response.ok) {
+      console.error('[pm] model download failed', { status: response.status });
+      return null;
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      console.error('[pm] model download was empty');
+      return null;
+    }
+
+    const assetId = crypto.randomUUID();
+    const storagePath =
+      `families/${job.family_id}/children/${job.child_id}` +
+      `/memories/${job.memory_id}/models/${assetId}.${format}`;
+
+    const { error: uploadError } = await client.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: format === 'glb' ? 'model/gltf-binary' : 'application/octet-stream',
+        upsert: true,
+      });
+    if (uploadError) {
+      console.error('[pm] model upload failed', uploadError.message);
+      return null;
+    }
+
+    const { error: assetError } = await client.from('assets').insert({
+      id: assetId,
+      family_id: job.family_id,
+      child_id: job.child_id,
+      memory_id: job.memory_id,
+      kind: 'model_3d',
+      storage_path: storagePath,
+      mime_type: format === 'glb' ? 'model/gltf-binary' : 'application/octet-stream',
+      byte_size: bytes.byteLength,
+      meta: { source: 'provider' },
+    });
+    if (assetError) {
+      console.error('[pm] model asset row failed', assetError.message);
+      return null;
+    }
+
+    return { assetId, byteSize: bytes.byteLength };
+  } catch (error) {
+    console.error('[pm] model store failed', error);
+    return null;
+  }
+}
+
 function stageFor(status: string): number {
   const map: Record<string, number> = {
     uploaded: 0,
@@ -308,12 +378,38 @@ async function refreshJob(userId: string, jobId: string) {
     return { status: 200, payload: { job: updated ?? job } };
   }
 
-  // Succeeded. Record the model, then run printability before we would ever
-  // let this reach a printer.
-  const printability = provider.capabilities.printability
-    ? await provider.analyzePrintability(status.result.modelUrl ?? '').catch(() => null)
-    : null;
+  // Succeeded. Copy the model into our own storage before declaring the job
+  // finished — a provider URL expires, and a memory pointing at a dead link is
+  // not a memory we have kept.
+  let modelAssetId: string | null = null;
+  if (status.result.modelUrl) {
+    const stored = await measured(
+      client,
+      { jobId, providerKey: provider.key, operation: 'download' },
+      () => storeModelAsset(client, job, status.result!.modelUrl!, status.result!.format),
+    ).catch(() => null);
 
+    if (!stored) {
+      // We have a model we cannot keep. That is a failure the parent can
+      // retry, not a success with nothing behind it.
+      const { data: failed } = await client
+        .from('three_d_jobs')
+        .update({
+          status: 'failed',
+          error_code: 'model_download_failed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .select('*')
+        .single();
+      return { status: 200, payload: { job: failed ?? job } };
+    }
+    modelAssetId = stored.assetId;
+  }
+
+  // Printability is NOT assessed. No provider we use computes it and we have
+  // not written our own pass, so nothing here may report a model as printable.
+  // Human QA remains the gate before anything is manufactured.
   await client.from('three_d_models').upsert(
     {
       job_id: jobId,
@@ -321,16 +417,15 @@ async function refreshJob(userId: string, jobId: string) {
       child_id: job.child_id,
       memory_id: job.memory_id,
       format: status.result.format,
+      asset_id: modelAssetId,
       polycount: status.result.polycount,
-      printability,
-      is_print_ready: (printability?.score ?? 0) >= 80,
+      printability: null,
+      is_print_ready: false,
       meta: {
         provider: provider.key,
-        // Kept so the app can show a demo preview when the provider produced
-        // no file of its own.
-        previewKind: status.result.modelUrl ? 'model' : 'procedural',
+        // 'model' means a real file is stored and the viewer should load it.
+        previewKind: modelAssetId ? 'model' : 'procedural',
         seed: jobId,
-        modelUrl: status.result.modelUrl,
         previewImageUrl: status.result.previewImageUrl,
       },
     },

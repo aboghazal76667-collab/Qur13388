@@ -17,7 +17,8 @@ import {
 } from '@/services/readiness';
 import { isAwaitingResult, isFailed } from '@/services/threeD/pipeline';
 import { AssetImage } from '@/components/AssetImage';
-import { FigurinePreview } from '@/components/FigurinePreview';
+import { ModelViewer } from '@/components/ModelViewer';
+import { useModelData } from '@/features/threeD/useModelData';
 import { issueLabel } from '@/features/readiness/ReadinessPanel';
 import { useArchive } from '@/state/archive';
 import { Banner, Button, Card, Chip, Row, RowGroup, Screen, ScreenHeader, Text } from '@/ui';
@@ -68,6 +69,8 @@ export default function MemoryDetail() {
     if (analysed.length === 0) return null;
     return assessCollection(analysed, pixelAnalyzerCapabilities, 'on-device-pixels', '1.0.0');
   }, [data]);
+
+  const modelData = useModelData(data?.model ?? null);
 
 
   if (!memoryId) return null;
@@ -221,9 +224,9 @@ export default function MemoryDetail() {
               <View style={{ alignSelf: 'stretch' }}>
                 <Text variant="subheading">{t.threeD.preview}</Text>
               </View>
-              <FigurinePreview seed={String(model.meta.seed ?? model.id)} size={220} />
-              {model.meta.previewKind === 'procedural' ? (
-                <Banner tone="info" title={t.threeD.demoBadge} body={t.threeD.demoExplainer} />
+              <ModelViewer data={modelData.data} loading={modelData.loading} size={220} />
+              {modelData.source === 'demo' ? (
+                <Banner tone="info" title={t.threeD.demoModelBadge} body={t.threeD.demoModelExplainer} />
               ) : null}
               <Button
                 label={t.threeD.preview}

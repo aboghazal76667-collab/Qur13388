@@ -7,7 +7,7 @@ import {
   MOCK_PROVIDER_KEY,
   mockCostUsd,
   mockPolycount,
-  mockPrintability,
+  unassessedPrintability,
   simulate,
 } from '@/services/threeD/mockSimulator';
 import { floorProgressFor, stageIndexFor } from '@/services/threeD/pipeline';
@@ -981,7 +981,7 @@ function recordProviderCall(db: Database, job: ThreeDJob, success: boolean): voi
 
 function buildMockModel(job: ThreeDJob): ThreeDModel {
   const timestamp = nowIso();
-  const printability = mockPrintability(job.id);
+  const printability = unassessedPrintability();
   return {
     id: newId(),
     jobId: job.id,
@@ -997,7 +997,9 @@ function buildMockModel(job: ThreeDJob): ThreeDModel {
     turntableAssetIds: [],
     polycount: mockPolycount(job.id),
     printability,
-    isPrintReady: printability.score >= 80,
+    // Never true from generation alone. Only a real print-validation pass, or
+    // a human QA approval, may set this.
+    isPrintReady: false,
     meta: { previewKind: 'procedural', seed: job.id, provider: MOCK_PROVIDER_KEY },
     createdAt: timestamp,
     updatedAt: timestamp,

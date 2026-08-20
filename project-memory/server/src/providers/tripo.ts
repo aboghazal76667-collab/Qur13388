@@ -162,7 +162,8 @@ export class TripoProvider implements ThreeDProvider {
     return status.result?.modelUrl ?? null;
   }
 
-  async analyzePrintability(): Promise<PrintabilityAssessment> {
+  async analyzePrintability(modelUrl: string): Promise<PrintabilityAssessment> {
+    void modelUrl;
     return {
       isWatertight: false,
       hasThinFeatures: false,

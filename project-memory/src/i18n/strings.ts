@@ -199,7 +199,17 @@ export interface Strings {
     preview: string;
     previewHint: string;
     saveToTimeline: string;
+    modelQuality: string;
+    modelQualityHigh: string;
+    modelQualityStandard: string;
+    figurineSize: string;
+    printCheck: string;
+    printCheckNotDone: string;
+    printCheckExplain: string;
+    sizeNotChosen: string;
     demoBadge: string;
+    demoModelBadge: string;
+    demoModelExplainer: string;
     demoExplainer: string;
     sourcePhotos: string;
     qualityGateTitle: string;
@@ -499,7 +509,19 @@ export const en: Strings = {
     preview: 'Preview',
     previewHint: 'Drag to turn it around.',
     saveToTimeline: 'Keep on the timeline',
+    modelQuality: 'Model quality',
+    modelQualityHigh: 'High detail',
+    modelQualityStandard: 'Standard detail',
+    figurineSize: 'Figurine size',
+    printCheck: 'Print check',
+    printCheckNotDone: 'Not performed',
+    printCheckExplain:
+      'We have not yet checked whether this can be printed safely. A person reviews every figurine before it is made.',
+    sizeNotChosen: 'Chosen when you order',
     demoBadge: 'Demo preview',
+    demoModelBadge: 'Demo figurine',
+    demoModelExplainer:
+      'This is a stand-in figurine, not your child. It is here so you can see how the preview works. Real figurines start once a 3D provider is connected — your memory and photos are real and stay saved either way.',
     demoExplainer: 'This is a demonstration figurine. Real 3D generation switches on once a provider is connected — the memory and photos are real and stay saved either way.',
     sourcePhotos: 'Photos used',
     qualityGateTitle: 'This photo may be difficult',

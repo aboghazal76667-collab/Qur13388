@@ -19,7 +19,14 @@ import type {
  * week.
  */
 
-const API_BASE = 'https://api.meshy.ai';
+/**
+ * Overridable so the integration can be exercised end to end against a
+ * stand-in server. Everything except the credential and the model itself is
+ * then real code on a real socket, which is the only way to know the request
+ * shape, the polling loop and the result mapping actually work before a key
+ * exists.
+ */
+const API_BASE = process.env.MESHY_API_BASE ?? 'https://api.meshy.ai';
 
 /**
  * Rough per-generation cost, used for the ledger until we have real invoices to
@@ -50,6 +57,9 @@ export class MeshyProvider implements ThreeDProvider {
     formats: ['glb', 'obj'],
     printability: false,
   };
+
+  /** Task ids created through the multi-image endpoint. */
+  private readonly multiViewJobs = new Set<string>();
 
   constructor(private readonly apiKey: string | undefined) {}
 
@@ -125,11 +135,17 @@ export class MeshyProvider implements ThreeDProvider {
 
     const providerJobId = payload.result ?? payload.id;
     if (!providerJobId) throw new Error('meshy: no task id returned');
+    this.multiViewJobs.add(providerJobId);
     return { providerJobId, state: 'queued', progress: 0, errorCode: null, result: null };
   }
 
   async checkStatus(providerJobId: string): Promise<ProviderJobStatus> {
-    const task = await this.call<MeshyTaskResponse>(`/openapi/v1/image-to-3d/${providerJobId}`);
+    // Multi-image tasks are polled on their own endpoint; asking the wrong one
+    // returns a 404 that would look like a failed generation.
+    const path = this.multiViewJobs.has(providerJobId)
+      ? `/openapi/v1/multi-image-to-3d/${providerJobId}`
+      : `/openapi/v1/image-to-3d/${providerJobId}`;
+    const task = await this.call<MeshyTaskResponse>(path);
 
     const progress = typeof task.progress === 'number' ? task.progress / 100 : 0;
     const status = (task.status ?? '').toUpperCase();
@@ -172,10 +188,11 @@ export class MeshyProvider implements ThreeDProvider {
     return status.result?.modelUrl ?? null;
   }
 
-  async analyzePrintability(): Promise<PrintabilityAssessment> {
+  async analyzePrintability(modelUrl: string): Promise<PrintabilityAssessment> {
     // Meshy does not assess printability, so this is our own pass to write.
     // Returning a confident-looking report we did not compute would be worse
     // than saying we have not checked.
+    void modelUrl;
     return {
       isWatertight: false,
       hasThinFeatures: false,
