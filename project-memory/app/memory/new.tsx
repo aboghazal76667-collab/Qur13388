@@ -3,16 +3,23 @@ import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { memoryKindPresentation, todayIso, type MemoryKind, type PhotoQualityReport } from '@/domain';
+import { memoryKindPresentation, todayIso, type MemoryKind } from '@/domain';
 import { useI18n } from '@/i18n';
 import { friendlyMessage } from '@/lib/errors';
 import { useTheme } from '@/theme';
-import { photoQualityAnalyzer } from '@/services/photoQuality';
+import { log } from '@/lib/log';
+import {
+  assessCollection,
+  readinessAnalyzer,
+  viewRoles,
+  type AnalysedPhoto,
+  type ViewRole,
+} from '@/services/readiness';
 import { maxPhotosPerMemory, pickPhotos, type PickedPhoto } from '@/services/photos/picker';
 import { useArchive } from '@/state/archive';
-import { PhotoQualityPanel } from '@/features/memory/PhotoQualityPanel';
+import { ReadinessPanel, roleLabel } from '@/features/readiness/ReadinessPanel';
 import { PhotoTray } from '@/features/memory/PhotoTray';
-import { Banner, Button, Card, DateField, Field, Screen, ScreenHeader, Text } from '@/ui';
+import { Banner, Button, Card, Chip, DateField, Field, Screen, ScreenHeader, Text } from '@/ui';
 
 /**
  * Creating a memory.
@@ -35,34 +42,48 @@ export default function NewMemory() {
   const [futureMessage, setFutureMessage] = useState('');
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState(0);
-  const [reports, setReports] = useState<Record<string, PhotoQualityReport>>({});
+  const [analysed, setAnalysed] = useState<Record<string, AnalysedPhoto>>({});
+  const [roles, setRoles] = useState<Record<string, ViewRole>>({});
   const [analysing, setAnalysing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const analyzer = useMemo(() => photoQualityAnalyzer(), []);
+  const analyzer = useMemo(() => readinessAnalyzer(), []);
 
-  // Every photo gets scored as it arrives, so the feedback is already on
-  // screen by the time the parent looks for it.
+  /**
+   * Photos are analysed as they arrive, so feedback is already on screen by the
+   * time the parent looks for it. Analysis decodes real pixels, so it is done
+   * once per photo and cached by URI rather than repeated on every render.
+   */
   useEffect(() => {
-    const pending = photos.filter((photo) => !reports[photo.uri]);
+    const pending = photos.filter((photo) => !analysed[photo.uri]);
     if (pending.length === 0) return;
 
     let cancelled = false;
     setAnalysing(true);
-    Promise.all(pending.map((photo) => analyzer.analyze(photo, photo.uri)))
+    Promise.all(
+      pending.map(async (photo) => {
+        try {
+          return await analyzer.analyze(photo.uri, photo.uri, roles[photo.uri] ?? 'unspecified');
+        } catch (analysisError) {
+          // A photo we cannot decode must not block the memory. It is simply
+          // left unassessed rather than reported as bad.
+          log.warn('could not analyse photo', { error: String(analysisError) });
+          return null;
+        }
+      }),
+    )
       .then((results) => {
         if (cancelled) return;
-        setReports((current) => {
+        setAnalysed((current) => {
           const next = { ...current };
-          pending.forEach((photo, index) => {
-            next[photo.uri] = results[index];
+          results.forEach((result, index) => {
+            if (result) next[pending[index].uri] = result;
           });
           return next;
         });
       })
-      .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setAnalysing(false);
       });
@@ -70,7 +91,17 @@ export default function NewMemory() {
     return () => {
       cancelled = true;
     };
-  }, [photos, reports, analyzer]);
+  }, [photos, analysed, roles, analyzer]);
+
+  /** Re-assessed whenever a photo or a declared role changes. */
+  const readiness = useMemo(() => {
+    const list = photos
+      .map((photo) => analysed[photo.uri])
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map((item) => ({ ...item, role: roles[item.photoId] ?? item.role }));
+    if (list.length === 0) return null;
+    return assessCollection(list, analyzer.capabilities, analyzer.id, analyzer.version);
+  }, [photos, analysed, roles, analyzer]);
 
   const choosePhotos = async () => {
     try {
@@ -115,7 +146,11 @@ export default function NewMemory() {
         futureMessage,
         // The report travels with the photo so the backend can key it to the
         // asset id the file actually gets.
-        photos: photos.map((photo) => ({ uri: photo.uri, quality: reports[photo.uri] ?? null })),
+        photos: photos.map((photo) => ({
+          uri: photo.uri,
+          role: roles[photo.uri] ?? 'unspecified',
+          signals: analysed[photo.uri]?.signals ?? null,
+        })),
       });
       router.replace(`/memory/${memory.id}`);
     } catch (error) {
@@ -188,7 +223,6 @@ export default function NewMemory() {
   /* ---------------------------------------------------- step 2: details */
 
   const selected = photos[selectedPhoto];
-  const selectedReport = selected ? (reports[selected.uri] ?? null) : null;
 
   return (
     <Screen
@@ -231,11 +265,42 @@ export default function NewMemory() {
           />
 
           {photos.length > 0 ? (
-            <PhotoQualityPanel
-              report={selectedReport}
-              analysing={analysing && !selectedReport}
-              inspectsPixels={analyzer.inspectsPixels}
-            />
+            <View style={{ gap: theme.spacing.md }}>
+              {/* The role is asked for, not guessed: the analyser cannot
+                  classify a viewing angle and does not pretend to. */}
+              <Text variant="label" color="textMuted">
+                {t.readiness.rolePrompt}
+              </Text>
+              <View
+                style={{
+                  flexDirection: isRtl ? 'row-reverse' : 'row',
+                  flexWrap: 'wrap',
+                  gap: theme.spacing.sm,
+                }}
+              >
+                {viewRoles.map((role) => {
+                  const active = (roles[selected?.uri ?? ''] ?? 'unspecified') === role;
+                  return (
+                    <Chip
+                      key={role}
+                      label={roleLabel(role, t)}
+                      selected={active}
+                      tone={active ? 'primary' : 'neutral'}
+                      onPress={() => {
+                        if (!selected) return;
+                        setRoles((current) => ({ ...current, [selected.uri]: role }));
+                      }}
+                    />
+                  );
+                })}
+              </View>
+
+              <ReadinessPanel
+                readiness={readiness}
+                analysing={analysing && !readiness}
+                selectedPhotoId={selected?.uri ?? null}
+              />
+            </View>
           ) : null}
         </View>
 

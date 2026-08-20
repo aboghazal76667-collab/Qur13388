@@ -15,7 +15,6 @@ import type {
   Child,
   Family,
   Memory,
-  PhotoQualityReport,
   Profile,
   QaDecision,
   QaReview,
@@ -62,7 +61,6 @@ import {
   toProfile,
   toProviderCall,
   toQaReview,
-  toQualityReport,
   type AssetRow,
   type AuditRow,
   type CapsuleRow,
@@ -75,7 +73,6 @@ import {
   type ProfileRow,
   type ProviderCallRow,
   type QaReviewRow,
-  type QualityReportRow,
 } from './rows';
 
 /**
@@ -568,7 +565,6 @@ async function uploadPhotos(
   photos: MemoryPhotoInput[],
 ): Promise<Asset[]> {
   const rows: Record<string, unknown>[] = [];
-  const reportRows: Record<string, unknown>[] = [];
 
   for (const photo of photos) {
     const uri = photo.uri;
@@ -593,37 +589,17 @@ async function uploadPhotos(
       storage_path: storagePath,
       mime_type: mimeType,
       byte_size: byteSize,
-      meta: {},
+      // `view` is read server-side when handing images to a provider;
+      // `readiness` lets the memory screen assess the set without re-decoding.
+      meta: { view: photo.role ?? 'unspecified', readiness: photo.signals ?? null },
     });
 
-    if (photo.quality) {
-      // Re-keyed to the id the file actually got, which is why the report
-      // travels with the photo rather than being saved separately after.
-      reportRows.push({
-        asset_id: assetId,
-        analyzer_id: photo.quality.analyzerId,
-        analyzer_version: photo.quality.analyzerVersion,
-        overall_score: photo.quality.overallScore,
-        verdict: photo.quality.verdict,
-        dimensions: photo.quality.dimensions,
-        summary: photo.quality.summary,
-        advice: photo.quality.advice,
-      });
-    }
   }
 
   if (rows.length === 0) return [];
   const { data, error } = await client.from('assets').insert(rows).select('*').returns<AssetRow[]>();
   if (error) fail('insert photo assets', error);
 
-  if (reportRows.length > 0) {
-    // A lost quality report costs a hint, not a photograph, so it must never
-    // fail the upload.
-    const { error: reportError } = await client
-      .from('photo_quality_reports')
-      .upsert(reportRows, { onConflict: 'asset_id' });
-    if (reportError) log.warn('could not save quality reports', { message: reportError.message });
-  }
 
   return (data ?? []).map(toAsset);
 }
@@ -871,55 +847,8 @@ class SupabaseAssetRepository implements AssetRepository {
     return data.signedUrl;
   }
 
-  async saveQualityReport(report: PhotoQualityReport): Promise<PhotoQualityReport> {
-    const { data, error } = await this.client
-      .from('photo_quality_reports')
-      .upsert(
-        {
-          id: report.id,
-          asset_id: report.assetId,
-          analyzer_id: report.analyzerId,
-          analyzer_version: report.analyzerVersion,
-          overall_score: report.overallScore,
-          verdict: report.verdict,
-          dimensions: report.dimensions,
-          summary: report.summary,
-          advice: report.advice,
-        },
-        { onConflict: 'asset_id' },
-      )
-      .select('*')
-      .single<QualityReportRow>();
-    if (error) fail('save quality report', error);
 
-    analytics.track('photo_quality_checked', {
-      score: report.overallScore,
-      verdict: report.verdict,
-      analyzer: report.analyzerId,
-    });
-    return toQualityReport(data);
-  }
 
-  async getQualityReport(assetId: UUID): Promise<PhotoQualityReport | null> {
-    const { data, error } = await this.client
-      .from('photo_quality_reports')
-      .select('*')
-      .eq('asset_id', assetId)
-      .maybeSingle<QualityReportRow>();
-    if (error) fail('get quality report', error);
-    return data ? toQualityReport(data) : null;
-  }
-
-  async getQualityReports(assetIds: UUID[]): Promise<Record<UUID, PhotoQualityReport>> {
-    if (assetIds.length === 0) return {};
-    const { data, error } = await this.client
-      .from('photo_quality_reports')
-      .select('*')
-      .in('asset_id', assetIds)
-      .returns<QualityReportRow[]>();
-    if (error) fail('get quality reports', error);
-    return Object.fromEntries((data ?? []).map((row) => [row.asset_id, toQualityReport(row)]));
-  }
 }
 
 /* --------------------------------------------------------------------- 3D */

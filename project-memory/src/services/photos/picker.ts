@@ -2,7 +2,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { AppError } from '@/lib/errors';
 import { log } from '@/lib/log';
-import type { PhotoInput } from '@/services/photoQuality';
 
 /**
  * Photo selection.
@@ -15,7 +14,7 @@ import type { PhotoInput } from '@/services/photoQuality';
 
 export const maxPhotosPerMemory = 5;
 
-export interface PickedPhoto extends PhotoInput {
+export interface PickedPhoto {
   uri: string;
   width: number | null;
   height: number | null;

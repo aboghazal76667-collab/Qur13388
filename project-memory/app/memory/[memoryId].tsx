@@ -1,17 +1,24 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Dimensions, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getBackend, type MemoryWithAssets } from '@/data';
-import { presentationFor, type PhotoQualityReport } from '@/domain';
+import { presentationFor } from '@/domain';
 import { useI18n } from '@/i18n';
 import { friendlyMessage } from '@/lib/errors';
 import { useTheme } from '@/theme';
-import { qualityWarningThreshold } from '@/services/photoQuality';
+import {
+  assessCollection,
+  pixelAnalyzerCapabilities,
+  readinessWarningThreshold,
+  type PhotoSignals,
+  type ViewRole,
+} from '@/services/readiness';
 import { isAwaitingResult, isFailed } from '@/services/threeD/pipeline';
 import { AssetImage } from '@/components/AssetImage';
 import { FigurinePreview } from '@/components/FigurinePreview';
+import { issueLabel } from '@/features/readiness/ReadinessPanel';
 import { useArchive } from '@/state/archive';
 import { Banner, Button, Card, Chip, Row, RowGroup, Screen, ScreenHeader, Text } from '@/ui';
 
@@ -27,7 +34,6 @@ export default function MemoryDetail() {
   const removeMemory = useArchive((state) => state.removeMemory);
 
   const [data, setData] = useState<MemoryWithAssets | null>(null);
-  const [reports, setReports] = useState<Record<string, PhotoQualityReport>>({});
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   /** Set when we have warned about a weak photo and are awaiting a decision. */
@@ -35,21 +41,34 @@ export default function MemoryDetail() {
 
   const load = useCallback(() => {
     if (!memoryId) return;
-    const backend = getBackend();
-    backend.memories
-      .get(memoryId)
-      .then(async (loaded) => {
-        setData(loaded);
-        if (!loaded) return;
-        const photoIds = loaded.assets.filter((a) => a.kind === 'photo').map((a) => a.id);
-        // A missing report only costs us the warning, so it never blocks the
-        // screen from rendering.
-        setReports(await backend.assets.getQualityReports(photoIds).catch(() => ({})));
-      })
+    getBackend()
+      .memories.get(memoryId)
+      .then(setData)
       .catch((loadError) => setError(friendlyMessage(loadError, t.errors)));
   }, [memoryId, t.errors]);
 
   useFocusEffect(useCallback(() => load(), [load]));
+
+  /**
+   * Readiness for the whole set, rebuilt from the measurements taken when each
+   * photo was added. Re-decoding here would cost seconds on a large memory for
+   * numbers that cannot have changed.
+   */
+  const readiness = useMemo(() => {
+    const analysed = (data?.assets ?? [])
+      .filter((asset) => asset.kind === 'photo')
+      .map((photo) => {
+        const signals = photo.meta?.readiness as PhotoSignals | null | undefined;
+        if (!signals) return null;
+        const role = (photo.meta?.view as ViewRole | undefined) ?? 'unspecified';
+        return { photoId: photo.id, role, signals };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    if (analysed.length === 0) return null;
+    return assessCollection(analysed, pixelAnalyzerCapabilities, 'on-device-pixels', '1.0.0');
+  }, [data]);
+
 
   if (!memoryId) return null;
 
@@ -67,15 +86,6 @@ export default function MemoryDetail() {
   const presentation = presentationFor(memory.kind);
   const photoWidth = Math.min(Dimensions.get('window').width - 96, 280);
 
-  /**
-   * The best photo we have to work from. A figurine is built from the whole
-   * set, so one strong photo is enough to proceed on.
-   */
-  const bestPhotoScore = photos.reduce((best, photo) => {
-    const score = reports[photo.id]?.overallScore;
-    return score === undefined ? best : Math.max(best, score);
-  }, -1);
-
   const startGeneration = async (force = false) => {
     if (photos.length === 0) {
       setError(t.threeD.needPhoto);
@@ -85,7 +95,7 @@ export default function MemoryDetail() {
     // Interrupt before spending a generation on a photo unlikely to produce
     // something the parent will like. It is a suggestion, not a block — they
     // can always continue.
-    if (!force && bestPhotoScore >= 0 && bestPhotoScore < qualityWarningThreshold) {
+    if (!force && readiness !== null && readiness.score < readinessWarningThreshold) {
       setQualityGate(true);
       return;
     }
@@ -254,7 +264,11 @@ export default function MemoryDetail() {
                 <Banner
                   tone="warning"
                   title={t.threeD.qualityGateTitle}
-                  body={reports[photos[0]?.id ?? '']?.advice ?? t.threeD.qualityGateBody}
+                  body={
+                    readiness?.photos[0]?.issues[0]
+                      ? issueLabel(readiness.photos[0].issues[0], t)
+                      : t.threeD.qualityGateBody
+                  }
                   action={
                     <View style={{ gap: theme.spacing.sm, paddingTop: theme.spacing.sm }}>
                       <Button

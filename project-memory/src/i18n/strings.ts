@@ -143,24 +143,46 @@ export interface Strings {
     archiveSubtitle: string;
     archiveEmpty: string;
   };
-  photoQuality: {
+  readiness: {
     title: string;
     analysing: string;
-    overall: string;
-    face: string;
-    body: string;
-    lighting: string;
-    background: string;
-    sharpness: string;
-    framing: string;
-    people: string;
-    verdictExcellent: string;
-    verdictGood: string;
-    verdictFair: string;
-    verdictPoor: string;
-    advice: string;
+    scoreSuffix: string;
+    whatWeChecked: string;
+    whatWeCannot: string;
+    coverage: string;
+    rolePrompt: string;
+    roleFace: string;
+    roleFrontBody: string;
+    roleFullBody: string;
+    roleSide: string;
+    roleBack: string;
+    roleDetail: string;
+    roleUnspecified: string;
+    present: string;
+    missing: string;
+    needed: string;
+    helpful: string;
+    enoughToStart: string;
+    couldBeBetter: string;
+    notEnough: string;
+    addAngle: string;
+    duplicateWarning: string;
+    outlierWarning: string;
     checkedOnDevice: string;
-    estimateNote: string;
+    issueTooSmall: string;
+    issueBlurred: string;
+    issueTooDark: string;
+    issueTooBright: string;
+    issueLowContrast: string;
+    issueSubjectSmall: string;
+    issueBusyBackground: string;
+    issueColourCast: string;
+    issueDuplicate: string;
+    measuredSharpness: string;
+    measuredLight: string;
+    measuredFraming: string;
+    measuredBackground: string;
+    measuredDetail: string;
   };
   threeD: {
     entryTitle: string;
@@ -414,24 +436,47 @@ export const en: Strings = {
     archiveSubtitle: 'Everything you have kept, in one place.',
     archiveEmpty: 'Memories you add will gather here.',
   },
-  photoQuality: {
-    title: 'Photo quality',
-    analysing: 'Looking at your photo…',
-    overall: 'Overall',
-    face: 'Face',
-    body: 'Body',
-    lighting: 'Lighting',
-    background: 'Background',
-    sharpness: 'Sharpness',
-    framing: 'Framing',
-    people: 'People in frame',
-    verdictExcellent: 'Excellent',
-    verdictGood: 'Good',
-    verdictFair: 'Fair',
-    verdictPoor: 'Difficult',
-    advice: 'What this means',
-    checkedOnDevice: 'Checked on your phone. The photo has not left your device yet.',
-    estimateNote: 'An early check, based on the photo’s size and detail. A closer look at faces and bodies is on the way.',
+  readiness: {
+    title: '3D readiness',
+    analysing: 'Looking at your photos…',
+    scoreSuffix: 'ready',
+    whatWeChecked: 'What we checked',
+    whatWeCannot:
+      'We check how clear, bright and well-framed each photo is. We cannot yet tell whether a photo shows a face or a whole body — you tell us that below.',
+    coverage: 'Photos that help',
+    rolePrompt: 'What does this photo show?',
+    roleFace: 'Face',
+    roleFrontBody: 'Front',
+    roleFullBody: 'Whole body',
+    roleSide: 'Side',
+    roleBack: 'Back',
+    roleDetail: 'Detail',
+    roleUnspecified: 'Not sure',
+    present: 'Added',
+    missing: 'Not added',
+    needed: 'Helps most',
+    helpful: 'Nice to have',
+    enoughToStart: 'We have enough to make a good start.',
+    couldBeBetter: 'This will work. Another angle would make it better.',
+    notEnough: 'These photos will be difficult to work from.',
+    addAngle: 'Adding a {role} photo may improve the result.',
+    duplicateWarning: 'Two of these photos look like the same picture. A different angle would add more.',
+    outlierWarning: 'One photo looks quite different from the others. Please check it shows the same child.',
+    checkedOnDevice: 'Checked on your phone. Your photos have not left your device.',
+    issueTooSmall: 'Quite small — the original at full size gives more to work with.',
+    issueBlurred: 'Looks blurred. A sharper photo makes a real difference.',
+    issueTooDark: 'Very dark in places. Daylight works best.',
+    issueTooBright: 'Very bright in places — some detail is lost.',
+    issueLowContrast: 'Quite flat. More light would bring out the detail.',
+    issueSubjectSmall: 'Your child looks small in the frame. Closer is better.',
+    issueBusyBackground: 'Busy background. A plainer one is easier to work from.',
+    issueColourCast: 'Strong colour cast from the lighting.',
+    issueDuplicate: 'Very similar to another photo here.',
+    measuredSharpness: 'Sharpness',
+    measuredLight: 'Light',
+    measuredFraming: 'Framing',
+    measuredBackground: 'Background',
+    measuredDetail: 'Detail',
   },
   threeD: {
     entryTitle: 'A memory you can hold',

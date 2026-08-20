@@ -25,9 +25,13 @@ import {
   traitsAtAgeMonths,
   type ChildTrait,
 } from '../src/domain/traits';
-import { HeuristicPhotoQualityAnalyzer } from '../src/services/photoQuality/heuristic';
-import { verdictFor } from '../src/services/photoQuality/types';
 import { floorProgressFor, isAwaitingResult, isFailed, stageIndexFor } from '../src/services/threeD/pipeline';
+import {
+  dHashOf, exposureOf, hammingDistance, measure, sharpnessOf, subjectProminenceOf,
+} from '../src/services/readiness/signals';
+import { assessCollection, scorePhoto } from '../src/services/readiness/collection';
+import { pixelAnalyzerCapabilities, type ViewRole } from '../src/services/readiness/types';
+import { blur, centredSubject, distantSubject, sharpDetail, shifted, uniform } from './fixtures';
 import { MOCK_DURATION_MS, seedUnit, simulate, willFail } from '../src/services/threeD/mockSimulator';
 import { extensionFromUri, mimeFromExtension, storagePathFor } from '../src/data/storagePaths';
 import { format } from '../src/i18n/format';
@@ -166,81 +170,115 @@ test('an unknown kind falls back rather than rendering blank', () => {
   assert.ok(presentationFor('milestone').icon.length > 0);
 });
 
-/* ------------------------------------------------------ photo quality */
+/* ----------------------------------------------------- 3D readiness */
 
-suite('Photo quality');
+suite('3D readiness — real pixel measurement');
 
-test('scoring the same photo twice gives the same answer', async () => {
-  const analyzer = new HeuristicPhotoQualityAnalyzer();
-  const photo = { uri: 'file:///photo.jpg', width: 3024, height: 4032, byteSize: 2_400_000, fileName: 'photo.jpg' };
-  const first = await analyzer.analyze(photo, 'asset-1');
-  const second = await analyzer.analyze(photo, 'asset-1');
-  assert.equal(first.overallScore, second.overallScore);
-  assert.deepEqual(
-    first.dimensions.map((d) => d.score),
-    second.dimensions.map((d) => d.score),
+test('blur genuinely lowers the sharpness measurement', () => {
+  // Ground truth: the same image, one blurred. If this ever stops holding, the
+  // measurement has become decorative.
+  const sharp = sharpDetail();
+  const soft = blur(sharp, 2);
+  assert.ok(sharpnessOf(sharp) > sharpnessOf(soft) * 3,
+    `sharp ${sharpnessOf(sharp)} vs blurred ${sharpnessOf(soft)}`);
+});
+
+test('exposure detects crushed blacks and blown highlights', () => {
+  assert.ok(exposureOf(uniform(32, 32, 5)).clippedShadows > 0.9);
+  assert.ok(exposureOf(uniform(32, 32, 252)).clippedHighlights > 0.9);
+  const mid = exposureOf(uniform(32, 32, 128));
+  assert.ok(mid.clippedShadows < 0.01 && mid.clippedHighlights < 0.01);
+});
+
+test('a centred subject reads as more prominent than a distant one', () => {
+  const near = subjectProminenceOf(centredSubject());
+  const far = subjectProminenceOf(distantSubject());
+  assert.ok(near.prominence > far.prominence);
+  assert.ok(far.backgroundBusyness > near.backgroundBusyness);
+});
+
+test('near-duplicate photos hash closer together than unrelated ones', () => {
+  const a = centredSubject();
+  const nearDuplicate = shifted(a, 1, 1);
+  const unrelated = distantSubject();
+  const dupDistance = hammingDistance(dHashOf(a), dHashOf(nearDuplicate));
+  const farDistance = hammingDistance(dHashOf(a), dHashOf(unrelated));
+  assert.ok(dupDistance < farDistance, `${dupDistance} !< ${farDistance}`);
+});
+
+suite('3D readiness — collection intelligence');
+
+function analysed(id: string, role: ViewRole, bitmap: ReturnType<typeof centredSubject>, megapixels = 3) {
+  const signals = measure(bitmap);
+  return { photoId: id, role, signals: { ...signals, megapixels, width: 2000, height: 3000 } };
+}
+
+test('a sharp, well-framed photo scores above a blurred or dark one', () => {
+  const good = scorePhoto(analysed('a', 'face', centredSubject(128, 160))).score;
+  const soft = scorePhoto(analysed('b', 'face', blur(sharpDetail(128, 160), 3))).score;
+  const dark = scorePhoto(analysed('c', 'face', uniform(128, 160, 5))).score;
+  assert.ok(good > soft && good > dark, `good ${good}, soft ${soft}, dark ${dark}`);
+});
+
+test('a small photo is flagged, whatever else is right about it', () => {
+  const report = scorePhoto(analysed('d', 'face', centredSubject(128, 160), 0.2));
+  assert.ok(report.issues.some((issue) => issue.key === 'too_small'));
+});
+
+test('one usable photo is enough to generate from', () => {
+  // Guidance, never a gate: a parent with a single photograph of a moment that
+  // will not come again should still get a keepsake.
+  const one = assessCollection(
+    [analysed('p1', 'face', centredSubject(128, 160))],
+    pixelAnalyzerCapabilities, 'test', '1',
   );
+  assert.equal(one.canGenerate, true);
+  assert.ok(one.coverage.some((item) => item.role === 'full_body' && item.state === 'missing'));
 });
 
-test('a better photo scores higher than a worse one', async () => {
-  const analyzer = new HeuristicPhotoQualityAnalyzer();
-  const good = await analyzer.analyze(
-    { uri: 'file:///a.jpg', width: 3024, height: 4032, byteSize: 3_000_000, fileName: 'a.jpg' },
-    'a',
+test('better coverage scores higher than a single view', () => {
+  const one = assessCollection(
+    [analysed('p1', 'face', centredSubject(128, 160))],
+    pixelAnalyzerCapabilities, 'test', '1',
+  ).score;
+  const many = assessCollection(
+    [
+      analysed('p1', 'face', centredSubject(128, 160)),
+      analysed('p2', 'full_body', centredSubject(140, 180)),
+      analysed('p3', 'side', centredSubject(150, 170, 0.3)),
+    ],
+    pixelAnalyzerCapabilities, 'test', '1',
+  ).score;
+  assert.ok(many > one, `${many} !> ${one}`);
+});
+
+test('the same shot added twice is detected rather than charged for', () => {
+  const base = centredSubject(128, 160);
+  const result = assessCollection(
+    [analysed('p1', 'face', base), analysed('p2', 'front_body', shifted(base, 1, 1))],
+    pixelAnalyzerCapabilities, 'test', '1',
   );
-  const bad = await analyzer.analyze(
-    { uri: 'file:///a.jpg', width: 320, height: 240, byteSize: 12_000, fileName: 'a.jpg' },
-    'a',
-  );
-  assert.ok(good.overallScore > bad.overallScore, `${good.overallScore} !> ${bad.overallScore}`);
+  assert.ok(result.duplicatePairs.length > 0);
+  assert.ok(result.photos[1].issues.some((issue) => issue.key === 'duplicate'));
 });
 
-test('scores stay inside 0–100 even with missing metadata', async () => {
-  const analyzer = new HeuristicPhotoQualityAnalyzer();
-  const report = await analyzer.analyze({ uri: 'file:///x.jpg' }, 'x');
-  assert.ok(report.overallScore >= 0 && report.overallScore <= 100);
-  for (const dimension of report.dimensions) {
-    assert.ok(dimension.score >= 0 && dimension.score <= 100, dimension.key);
-  }
+test('an empty set cannot generate', () => {
+  const none = assessCollection([], pixelAnalyzerCapabilities, 'test', '1');
+  assert.equal(none.canGenerate, false);
+  assert.equal(none.score, 0);
 });
 
-test('a weak photo comes with advice, a strong one does not need it', async () => {
-  const analyzer = new HeuristicPhotoQualityAnalyzer();
-  const bad = await analyzer.analyze(
-    { uri: 'file:///tiny.jpg', width: 200, height: 150, byteSize: 4_000, fileName: 'tiny.jpg' },
-    'tiny',
-  );
-  assert.ok(bad.advice && bad.advice.length > 0);
-  assert.equal(bad.verdict, 'poor');
-});
-
-test('a small photo cannot average its way to a good score', async () => {
-  // A flattering lighting estimate must not rescue an image that simply does
-  // not have enough of the child in it.
-  const analyzer = new HeuristicPhotoQualityAnalyzer();
-  const small = await analyzer.analyze(
-    { uri: 'file:///small.jpg', width: 400, height: 300, byteSize: 90_000, fileName: 'small.jpg' },
-    'small',
-  );
-  assert.ok(small.overallScore <= 45, `scored ${small.overallScore}`);
-  assert.equal(small.verdict, 'poor');
-  assert.ok(small.advice?.toLowerCase().includes('small'));
-});
-
-test('the analyzer is honest about not inspecting pixels', () => {
-  // The UI reads this flag to word the panel. If a real vision model lands and
-  // forgets to set it, the product would understate what it knows — but if a
-  // metadata scorer claimed true, it would overstate, which is the failure
-  // that matters when the subject is somebody's child.
-  assert.equal(new HeuristicPhotoQualityAnalyzer().inspectsPixels, false);
-});
-
-test('verdict thresholds line up with the score bands', () => {
-  assert.equal(verdictFor(90), 'excellent');
-  assert.equal(verdictFor(85), 'excellent');
-  assert.equal(verdictFor(70), 'good');
-  assert.equal(verdictFor(50), 'fair');
-  assert.equal(verdictFor(49), 'poor');
+test('the analyser declares exactly what it cannot do', () => {
+  // This is the test that keeps the product honest. The previous system
+  // reported "Face: Excellent" without anything having looked for a face; these
+  // flags are what the UI reads before it is allowed to claim anything.
+  assert.equal(pixelAnalyzerCapabilities.readsPixels, true);
+  assert.equal(pixelAnalyzerCapabilities.measuresSharpness, true);
+  assert.equal(pixelAnalyzerCapabilities.detectsPerson, false);
+  assert.equal(pixelAnalyzerCapabilities.detectsFace, false);
+  assert.equal(pixelAnalyzerCapabilities.detectsBody, false);
+  assert.equal(pixelAnalyzerCapabilities.classifiesView, false);
+  assert.equal(pixelAnalyzerCapabilities.verifiesIdentity, false);
 });
 
 /* --------------------------------------------------------- 3D pipeline */

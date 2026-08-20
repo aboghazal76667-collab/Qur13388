@@ -1,3 +1,5 @@
+import type { PhotoSignals, ViewRole } from '@/services/readiness/types';
+
 import type {
   Asset,
   AuditEvent,
@@ -8,7 +10,6 @@ import type {
   IsoDate,
   Memory,
   MemoryKind,
-  PhotoQualityReport,
   Profile,
   ProviderCall,
   QaDecision,
@@ -120,8 +121,22 @@ export interface ChildRepository {
 export interface MemoryPhotoInput {
   /** Local file URI. */
   uri: string;
-  /** Computed on the device before upload, when one was produced. */
-  quality?: PhotoQualityReport | null;
+  /**
+   * What this photo is for in a reconstruction, as declared by the parent.
+   *
+   * Declared rather than detected: the analyser cannot classify a viewing
+   * angle, and asking is both honest and better product — a parent knows at a
+   * glance which picture shows their child's face.
+   */
+  role?: ViewRole;
+  /**
+   * Measurements taken from the photo's actual pixels before upload.
+   *
+   * Stored on the asset's `meta` rather than in a new table. That bag exists
+   * precisely so new per-asset information costs no migration, and readiness
+   * is the first thing to use it for real.
+   */
+  signals?: PhotoSignals | null;
 }
 
 export interface CreateMemoryInput {
@@ -164,10 +179,6 @@ export interface AssetRepository {
    * it expires, and that is the point.
    */
   resolveUrl(asset: Asset | null | undefined): Promise<string | null>;
-  saveQualityReport(report: PhotoQualityReport): Promise<PhotoQualityReport>;
-  getQualityReport(assetId: UUID): Promise<PhotoQualityReport | null>;
-  /** Reports for a whole memory, so the 3D entry point can check them at once. */
-  getQualityReports(assetIds: UUID[]): Promise<Record<UUID, PhotoQualityReport>>;
 }
 
 export interface StartGenerationInput {

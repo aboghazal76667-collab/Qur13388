@@ -19,7 +19,6 @@ import type {
   Child,
   Family,
   Memory,
-  PhotoQualityReport,
   Profile,
   ProviderCall,
   QaDecision,
@@ -224,7 +223,6 @@ class LocalAuthGateway implements AuthGateway {
       const { profileId, familyId: fid } = session;
 
       db.assets = db.assets.filter((item) => item.familyId !== fid);
-      db.qualityReports = [];
       db.memories = db.memories.filter((item) => item.familyId !== fid);
       db.children = db.children.filter((item) => item.familyId !== fid);
       db.jobs = db.jobs.filter((item) => item.familyId !== fid);
@@ -423,9 +421,6 @@ class LocalChildRepository implements ChildRepository {
       db.models = db.models.filter((item) => item.childId !== childId);
       db.capsuleMessages = db.capsuleMessages.filter((item) => item.childId !== childId);
       db.childTraits = db.childTraits.filter((item) => item.childId !== childId);
-      db.qualityReports = db.qualityReports.filter(
-        (report) => !memoryIds.has(report.assetId) && db.assets.some((a) => a.id === report.assetId),
-      );
       db.children = db.children.filter(
         (item) => !(item.id === childId && item.familyId === familyId),
       );
@@ -629,8 +624,7 @@ class LocalMemoryRepository implements MemoryRepository {
     if (!session) throw new AppError('auth');
 
     const memoryId = newId();
-    const stored = await storePhotos(session.familyId, input.childId, memoryId, input.photos);
-    const { assets, reports } = stored;
+    const assets = await storePhotos(session.familyId, input.childId, memoryId, input.photos);
 
     return transact((db) => {
       const timestamp = nowIso();
@@ -650,7 +644,6 @@ class LocalMemoryRepository implements MemoryRepository {
       };
       db.memories = [...db.memories, memory];
       db.assets = [...db.assets, ...assets];
-      db.qualityReports = [...db.qualityReports, ...reports];
 
       audit(db, 'memory.created', 'memory', memory.id, { kind: memory.kind });
       analytics.track('memory_created', { kind: memory.kind, photoCount: assets.length });
@@ -687,7 +680,6 @@ class LocalMemoryRepository implements MemoryRepository {
         db.assets.filter((item) => item.memoryId === memoryId).map((item) => item.id),
       );
       db.assets = db.assets.filter((item) => item.memoryId !== memoryId);
-      db.qualityReports = db.qualityReports.filter((item) => !assetIds.has(item.assetId));
       db.jobs = db.jobs.filter((item) => item.memoryId !== memoryId);
       db.models = db.models.filter((item) => item.memoryId !== memoryId);
       db.memories = db.memories.filter(
@@ -699,20 +691,13 @@ class LocalMemoryRepository implements MemoryRepository {
   }
 }
 
-interface StoredPhotos {
-  assets: Asset[];
-  /** Reports re-keyed to the asset ids the files actually got. */
-  reports: PhotoQualityReport[];
-}
-
 async function storePhotos(
   familyId: UUID,
   childId: UUID,
   memoryId: UUID,
   photos: MemoryPhotoInput[],
-): Promise<StoredPhotos> {
+): Promise<Asset[]> {
   const assets: Asset[] = [];
-  const reports: PhotoQualityReport[] = [];
 
   for (const photo of photos) {
     const uri = photo.uri;
@@ -740,17 +725,20 @@ async function storePhotos(
       height: null,
       byteSize: stored.byteSize,
       durationMs: null,
-      meta: { localUri: stored.uri },
+      // `view` is read by the server when it hands images to a provider, and
+      // `readiness` lets the memory screen assess the whole set without
+      // re-decoding every photograph.
+      meta: {
+        localUri: stored.uri,
+        view: photo.role ?? 'unspecified',
+        readiness: photo.signals ?? null,
+      },
       createdAt: timestamp,
       updatedAt: timestamp,
     });
-
-    if (photo.quality) {
-      reports.push({ ...photo.quality, assetId });
-    }
   }
 
-  return { assets, reports };
+  return assets;
 }
 
 /* ----------------------------------------------------------------- assets */
@@ -783,16 +771,10 @@ class LocalAssetRepository implements AssetRepository {
     });
     if (!context) throw new AppError('not_found', 'memory');
 
-    const { assets, reports } = await storePhotos(
-      context.familyId,
-      context.childId,
-      memoryId,
-      photos,
-    );
+    const assets = await storePhotos(context.familyId, context.childId, memoryId, photos);
 
     return transact((db) => {
       db.assets = [...db.assets, ...assets];
-      db.qualityReports = [...db.qualityReports, ...reports];
       const index = db.memories.findIndex((item) => item.id === memoryId);
       if (index >= 0 && !db.memories[index].coverAssetId && assets[0]) {
         const updated = touch({ ...db.memories[index], coverAssetId: assets[0].id });
@@ -809,7 +791,6 @@ class LocalAssetRepository implements AssetRepository {
 
     await transact((db) => {
       db.assets = db.assets.filter((item) => item.id !== assetId);
-      db.qualityReports = db.qualityReports.filter((item) => item.assetId !== assetId);
       db.memories = db.memories.map((memory) =>
         memory.coverAssetId === assetId
           ? touch({
@@ -834,35 +815,6 @@ class LocalAssetRepository implements AssetRepository {
     return localUriFor(asset.storagePath);
   }
 
-  async saveQualityReport(report: PhotoQualityReport): Promise<PhotoQualityReport> {
-    return transact((db) => {
-      db.qualityReports = [
-        ...db.qualityReports.filter((item) => item.assetId !== report.assetId),
-        report,
-      ];
-      analytics.track('photo_quality_checked', {
-        score: report.overallScore,
-        verdict: report.verdict,
-        analyzer: report.analyzerId,
-      });
-      return report;
-    });
-  }
-
-  async getQualityReport(assetId: UUID): Promise<PhotoQualityReport | null> {
-    return read((db) => db.qualityReports.find((item) => item.assetId === assetId) ?? null);
-  }
-
-  async getQualityReports(assetIds: UUID[]): Promise<Record<UUID, PhotoQualityReport>> {
-    if (assetIds.length === 0) return {};
-    return read((db) =>
-      Object.fromEntries(
-        db.qualityReports
-          .filter((item) => assetIds.includes(item.assetId))
-          .map((item) => [item.assetId, item]),
-      ),
-    );
-  }
 }
 
 /* --------------------------------------------------------------------- 3D */

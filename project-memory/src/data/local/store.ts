@@ -10,7 +10,6 @@ import type {
   Family,
   FamilyMember,
   Memory,
-  PhotoQualityReport,
   Profile,
   ProviderCall,
   QaReview,
@@ -38,7 +37,6 @@ export interface Database {
   childTraits: ChildTrait[];
   memories: Memory[];
   assets: Asset[];
-  qualityReports: PhotoQualityReport[];
   jobs: ThreeDJob[];
   models: ThreeDModel[];
   providerCalls: ProviderCall[];
@@ -61,7 +59,6 @@ export function emptyDatabase(): Database {
     childTraits: [],
     memories: [],
     assets: [],
-    qualityReports: [],
     jobs: [],
     models: [],
     providerCalls: [],
