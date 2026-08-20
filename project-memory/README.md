@@ -131,6 +131,7 @@ project-memory/
 | `npm run typecheck` | Check types across the app |
 | `npm run ios` / `npm run android` | Open in a simulator, if you have one |
 | `npm run web` | Open in a browser |
+| `npm run build:web` | One self-contained HTML file of the whole app |
 | `npm run server:install` | Install the server's dependencies |
 | `npm run server` | Run the AI router locally |
 

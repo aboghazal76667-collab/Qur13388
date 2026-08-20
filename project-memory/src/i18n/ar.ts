@@ -194,6 +194,8 @@ export const ar: Strings = {
     ],
     exportData: 'حفظ نسخة من بياناتي',
     exportSaved: 'حُفظت على هذا الهاتف: {children} أطفال و{memories} ذكرى، في {path}.',
+    exportUnavailable:
+      'جمّعنا نسختك — {children} أطفال و{memories} ذكرى — لكن هذا المتصفح لا يسمح لنا بحفظ ملف. افتح التطبيق على هاتفك للاحتفاظ بنسخة.',
     deleteEverything: 'حذف كل شيء',
     deleteEverythingConfirm: 'سيحذف هذا نهائيًا كل طفل وذكرى وصورة في حساب عائلتك.',
     trainingOptInTitle: 'ساعدنا في تحسين نماذجنا',
@@ -253,6 +255,8 @@ export const ar: Strings = {
     nameRequired: 'أدخل الاسم الأول من فضلك.',
     dobRequired: 'اختر تاريخ الميلاد من فضلك.',
     dobFuture: 'هذا التاريخ في المستقبل.',
+    storageUnavailable:
+      'هذا المتصفح لا يسمح لنا بالحفظ على جهازك. يمكنك التصفح، لكن ما تضيفه سيختفي عند إغلاق الصفحة.',
     titleRequired: 'أعطِ هذه الذكرى عنوانًا من فضلك.',
   },
 };

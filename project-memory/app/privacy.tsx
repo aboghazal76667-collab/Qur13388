@@ -38,14 +38,17 @@ export default function Privacy() {
     setBusy(true);
     try {
       const result = await exportFamilyData();
-      setNotice({
-        tone: 'success',
-        body: format(t.privacy.exportSaved, {
-          children: formatNumber(result.children),
-          memories: formatNumber(result.memories),
-          path: result.path ?? '—',
-        }),
-      });
+      const counts = {
+        children: formatNumber(result.children),
+        memories: formatNumber(result.memories),
+      };
+      // No file means no file. Claiming a copy was saved when none was would be
+      // the worst possible lie to tell on the privacy screen.
+      setNotice(
+        result.path
+          ? { tone: 'success', body: format(t.privacy.exportSaved, { ...counts, path: result.path }) }
+          : { tone: 'info', body: format(t.privacy.exportUnavailable, counts) },
+      );
     } catch (error) {
       setNotice({ tone: 'danger', body: friendlyMessage(error, t.errors) });
     } finally {

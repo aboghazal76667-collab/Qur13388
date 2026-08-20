@@ -97,9 +97,31 @@ async function readRaw(): Promise<Database> {
   }
 }
 
+/**
+ * True until a write to device storage fails.
+ *
+ * Some contexts refuse storage outright — a sandboxed browser frame, private
+ * browsing, a full disk. The app keeps working from the in-memory cache, but a
+ * parent must never be left believing a memory was saved when it was not, so
+ * the failure is recorded and surfaced rather than swallowed.
+ */
+let persistenceHealthy = true;
+
+export function isPersistenceHealthy(): boolean {
+  return persistenceHealthy;
+}
+
 async function writeRaw(db: Database): Promise<void> {
+  // The cache is updated first and unconditionally: losing the write to disk
+  // is recoverable, losing it from the session as well is not.
   cache = db;
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    persistenceHealthy = true;
+  } catch (error) {
+    persistenceHealthy = false;
+    log.error('device storage write failed — data is session-only', { error: String(error) });
+  }
 }
 
 /** Runs `mutator` against the database and persists the result atomically. */

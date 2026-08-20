@@ -185,6 +185,7 @@ export interface Strings {
     points: { title: string; body: string }[];
     exportData: string;
     exportSaved: string;
+    exportUnavailable: string;
     deleteEverything: string;
     deleteEverythingConfirm: string;
     trainingOptInTitle: string;
@@ -239,6 +240,7 @@ export interface Strings {
     nameRequired: string;
     dobRequired: string;
     dobFuture: string;
+    storageUnavailable: string;
     titleRequired: string;
   };
 }
@@ -437,6 +439,8 @@ export const en: Strings = {
     ],
     exportData: 'Save a copy of my data',
     exportSaved: 'Saved to this phone: {children} children and {memories} memories, at {path}.',
+    exportUnavailable:
+      'We gathered your copy — {children} children and {memories} memories — but this browser will not let us save a file. Open Project Memory on your phone to keep a copy.',
     deleteEverything: 'Delete everything',
     deleteEverythingConfirm: 'This permanently deletes every child, memory and photo in your family account.',
     trainingOptInTitle: 'Help improve our models',
@@ -496,6 +500,8 @@ export const en: Strings = {
     nameRequired: 'Please enter a first name.',
     dobRequired: 'Please choose a date of birth.',
     dobFuture: 'That date is in the future.',
+    storageUnavailable:
+      'This browser will not let us save to your device. You can look around, but anything you add will be gone when you close this page.',
     titleRequired: 'Please give this memory a title.',
   },
 };

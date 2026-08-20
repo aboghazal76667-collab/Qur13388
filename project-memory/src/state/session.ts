@@ -59,6 +59,8 @@ export const useSession = create<SessionState>((set) => ({
       const session = await getBackend().auth.signUp(input);
       set({ ...apply(session), busy: false });
     } catch (error) {
+      // The parent sees a sentence; the detail belongs here.
+      log.error('signUp failed', { error: String(error) });
       set({ busy: false, error: toAppError(error, 'validation') });
       throw error;
     }
@@ -70,6 +72,8 @@ export const useSession = create<SessionState>((set) => ({
       const session = await getBackend().auth.signIn(input);
       set({ ...apply(session), busy: false });
     } catch (error) {
+      // The parent sees a sentence; the detail belongs here.
+      log.error('signIn failed', { error: String(error) });
       set({ busy: false, error: toAppError(error, 'auth') });
       throw error;
     }
@@ -91,6 +95,7 @@ export const useSession = create<SessionState>((set) => ({
       await getBackend().auth.deleteAccount();
       set({ ...apply(null), busy: false });
     } catch (error) {
+      log.error('account deletion failed', { error: String(error) });
       set({ busy: false, error: toAppError(error) });
       throw error;
     }

@@ -100,6 +100,29 @@ layout, and translation completeness.
 verification in [DATABASE.md](DATABASE.md#verifying-it), run against a real
 Postgres. Run it after any change to `0003_rls.sql` or `0004_storage.sql`.
 
+## A browser build, for when there is no computer to hand
+
+```bash
+npm run build:web
+```
+
+Produces `.web-build/project-memory.html` — the whole app folded into one file
+with the JavaScript inlined and every asset it reaches for turned into a data
+URI. It makes **no external requests at all**, so it runs from a strict-CSP
+host or straight off a phone.
+
+Two things a standalone build needs, both handled in `app-entry.web.js` behind
+`EXPO_PUBLIC_STANDALONE=1`: the router is pinned to the root route (otherwise
+the host's own path is matched against the app's routes and renders "Unmatched
+Route"), and the address bar is frozen (otherwise the URL drifts to `/family`
+and a refresh asks the host for a route it never had).
+
+This is a preview, not a replacement for the phone build. In a browser the
+archive lives in browser storage rather than in the app's private sandbox, and
+the data export cannot write a file — the app says so rather than claiming a
+copy it did not save. Some browsers refuse storage altogether; the app keeps
+working for the session and warns that nothing will be kept.
+
 ## Building for the App Store, eventually
 
 Expo Go is for development. A real release needs EAS:

@@ -1,7 +1,7 @@
 {
   "name": "project-memory",
   "version": "0.1.0",
-  "main": "expo-router/entry",
+  "main": "app-entry",
   "private": true,
   "scripts": {
     "start": "expo start",
@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx tests/run.ts",
     "server": "npm --prefix server run dev",
-    "server:install": "npm --prefix server install"
+    "server:install": "npm --prefix server install",
+    "build:web": "EXPO_PUBLIC_STANDALONE=1 expo export --platform web --output-dir .web-build --clear && node scripts/build-web-artifact.js .web-build .web-build/project-memory.html"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.11",
