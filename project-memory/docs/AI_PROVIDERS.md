@@ -60,6 +60,33 @@ It produces no file. The app draws its demo figurine from a seed and labels it
 "Demo preview" everywhere it appears. Serving a stock render as if it were a
 likeness of somebody's child is the one thing this product must never do.
 
+## Status, precisely
+
+| Piece | State |
+| --- | --- |
+| Provider abstraction, router, cost ledger | **REAL** |
+| `Mock3DProvider` | **REAL** as a mock — walks the true state machine, fails ~1 first attempt in 12 |
+| `MeshyProvider` HTTP path | **REAL**, verified over a socket against a stand-in server (9 checks) |
+| A real Meshy generation | **BLOCKED** — needs `MESHY_API_KEY` |
+| Model download into our storage | **REAL** code, **untested against a live provider** |
+| GLB viewer | **REAL** — three.js over expo-gl, verified rendering and rotating an actual glTF |
+| Printability validation | **NOT IMPLEMENTED** — every provider reports `printability_not_assessed` |
+| Face/person/view detection | **NOT IMPLEMENTED** — see the readiness section below |
+
+## 3D readiness, and what it does not do
+
+Readiness replaced "photo quality". It decodes the image and measures it —
+Laplacian variance for blur, luma clipping for exposure, centre-versus-border
+edge energy for framing and background, a difference hash for duplicates.
+
+It cannot see a person, a face, a body, or a viewing angle. `VisionCapabilities`
+declares each of those false, the UI reads the flags before it claims anything,
+and a test asserts them. Viewing angles are therefore **declared by the parent**,
+not detected.
+
+Adding real vision means implementing `ReadinessAnalyzer` server-side and
+flipping those flags. No screen changes.
+
 ## The quality gate
 
 Before a generation is dispatched, the app checks the stored quality reports for

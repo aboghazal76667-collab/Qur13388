@@ -7,6 +7,7 @@ import type {
   CapsuleMessage,
   Child,
   ChildTrait,
+  LikenessFeedback,
   Family,
   FamilyMember,
   Memory,
@@ -41,6 +42,7 @@ export interface Database {
   models: ThreeDModel[];
   providerCalls: ProviderCall[];
   qaReviews: QaReview[];
+  likenessFeedback: LikenessFeedback[];
   capsuleMessages: CapsuleMessage[];
   auditEvents: AuditEvent[];
   /** Credentials never leave the device in local mode. Hashed, not stored raw. */
@@ -63,6 +65,7 @@ export function emptyDatabase(): Database {
     models: [],
     providerCalls: [],
     qaReviews: [],
+    likenessFeedback: [],
     capsuleMessages: [],
     auditEvents: [],
     credentials: [],

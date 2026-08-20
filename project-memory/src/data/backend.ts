@@ -4,6 +4,9 @@ import type {
   Asset,
   AuditEvent,
   ChildTrait,
+  LikenessAspect,
+  LikenessFeedback,
+  LikenessVerdict,
   CapsuleMessage,
   Child,
   Family,
@@ -199,6 +202,19 @@ export interface ThreeDGateway {
   cancel(jobId: UUID): Promise<void>;
 }
 
+export interface SubmitLikenessInput {
+  jobId: UUID;
+  verdict: LikenessVerdict;
+  aspects?: LikenessAspect[];
+  note?: string | null;
+  readinessScore?: number | null;
+}
+
+export interface LikenessGateway {
+  submit(input: SubmitLikenessInput): Promise<LikenessFeedback>;
+  forJob(jobId: UUID): Promise<LikenessFeedback | null>;
+}
+
 export interface AdminOverview {
   families: number;
   children: number;
@@ -249,6 +265,7 @@ export interface MemoryBackend {
   readonly memories: MemoryRepository;
   readonly assets: AssetRepository;
   readonly threeD: ThreeDGateway;
+  readonly likeness: LikenessGateway;
   readonly admin: AdminGateway;
   readonly capsule: CapsuleGateway;
 }

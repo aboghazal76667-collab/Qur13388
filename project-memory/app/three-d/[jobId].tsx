@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getBackend } from '@/data';
-import type { ThreeDJob, ThreeDModel } from '@/domain';
+import type { Asset, ThreeDJob, ThreeDModel } from '@/domain';
 import { useI18n } from '@/i18n';
 import { friendlyMessage } from '@/lib/errors';
 import { log } from '@/lib/log';
@@ -13,6 +13,7 @@ import { analytics } from '@/services/analytics';
 import { isAwaitingResult, isFailed } from '@/services/threeD/pipeline';
 import { ModelViewer } from '@/components/ModelViewer';
 import { useModelData } from '@/features/threeD/useModelData';
+import { LikenessReview } from '@/features/threeD/LikenessReview';
 import { GenerationStages } from '@/features/threeD/GenerationStages';
 import { Banner, Button, Row, RowGroup, Screen, ScreenHeader, Text } from '@/ui';
 
@@ -40,6 +41,8 @@ export default function ThreeDJobScreen() {
   const [retrying, setRetrying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modelData = useModelData(model);
+  const [sourcePhotos, setSourcePhotos] = useState<Asset[]>([]);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
 
   const stop = useCallback(() => {
     if (timer.current) {
@@ -61,8 +64,17 @@ export default function ThreeDJobScreen() {
 
         stop();
         if (!isFailed(refreshed.status)) {
-          const found = await getBackend().threeD.getModel(id);
+          const backend = getBackend();
+          const [found, existing, photos] = await Promise.all([
+            backend.threeD.getModel(id),
+            backend.likeness.forJob(id).catch(() => null),
+            // The comparison is the point of the review, so the photos it was
+            // built from are loaded with the result rather than on demand.
+            Promise.all(refreshed.sourceAssetIds.map((assetId) => backend.assets.get(assetId))),
+          ]);
           setModel(found);
+          setFeedbackGiven(existing !== null);
+          setSourcePhotos(photos.filter((photo): photo is Asset => photo !== null));
         }
       } catch (pollError) {
         log.warn('poll failed', { jobId: id, error: String(pollError) });
@@ -229,6 +241,27 @@ export default function ThreeDJobScreen() {
         {!model.isPrintReady ? (
           <Banner tone="info" body={t.threeD.printCheckExplain} />
         ) : null}
+
+        <LikenessReview
+          sourcePhotos={sourcePhotos}
+          submitted={feedbackGiven}
+          onSubmit={async (verdict, aspects, note) => {
+            try {
+              await getBackend().likeness.submit({
+                jobId: job.id,
+                verdict,
+                aspects,
+                note,
+                readinessScore: null,
+              });
+              setFeedbackGiven(true);
+            } catch (feedbackError) {
+              // Losing a verdict must never cost the parent their result.
+              log.warn('could not save likeness feedback', { error: String(feedbackError) });
+              setFeedbackGiven(true);
+            }
+          }}
+        />
       </View>
     </Screen>
   );

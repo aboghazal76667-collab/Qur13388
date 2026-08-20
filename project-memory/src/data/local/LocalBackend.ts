@@ -15,6 +15,7 @@ import type {
   Asset,
   AuditEvent,
   ChildTrait,
+  LikenessFeedback,
   CapsuleMessage,
   Child,
   Family,
@@ -46,8 +47,10 @@ import type {
   MemoryWithAssets,
   SignInInput,
   SignUpInput,
+  LikenessGateway,
   RecordTraitInput,
   StartGenerationInput,
+  SubmitLikenessInput,
   ThreeDGateway,
   TraitRepository,
 } from '../backend';
@@ -1035,6 +1038,69 @@ class LocalCapsuleGateway implements CapsuleGateway {
   }
 }
 
+/* ---------------------------------------------------------- likeness ---- */
+
+/**
+ * The parent's verdict on whether the figurine looks like their child.
+ *
+ * Stored with the context that makes it interpretable later — which provider,
+ * how many photos, what our own readiness score predicted — because feedback
+ * without that context cannot answer the questions it exists to answer.
+ */
+class LocalLikenessGateway implements LikenessGateway {
+  async submit(input: SubmitLikenessInput): Promise<LikenessFeedback> {
+    const context = await read((db) => {
+      if (!db.session) return null;
+      const job = db.jobs.find(
+        (item) => item.id === input.jobId && item.familyId === db.session!.familyId,
+      );
+      if (!job) return null;
+      return { job, model: db.models.find((item) => item.jobId === job.id) ?? null, session: db.session };
+    });
+    if (!context) throw new AppError('not_found', 'job');
+
+    return transact((db) => {
+      const timestamp = nowIso();
+      const existing = db.likenessFeedback.find((item) => item.jobId === input.jobId);
+
+      const feedback: LikenessFeedback = {
+        id: existing?.id ?? newId(),
+        familyId: context.job.familyId,
+        jobId: context.job.id,
+        modelId: context.model?.id ?? null,
+        childId: context.job.childId,
+        submittedBy: context.session.profileId,
+        verdict: input.verdict,
+        // A 'good' verdict carries no complaints, whatever was passed.
+        aspects: input.verdict === 'good' ? [] : (input.aspects ?? []),
+        note: input.note?.trim() || null,
+        providerKey: context.job.providerKey,
+        sourcePhotoCount: context.job.sourceAssetIds.length,
+        readinessScore: input.readinessScore ?? null,
+        createdAt: existing?.createdAt ?? timestamp,
+        updatedAt: timestamp,
+      };
+
+      db.likenessFeedback = [
+        ...db.likenessFeedback.filter((item) => item.jobId !== input.jobId),
+        feedback,
+      ];
+      audit(db, 'likeness.submitted', 'three_d_job', input.jobId, { verdict: input.verdict });
+      analytics.track('likeness_submitted', {
+        verdict: input.verdict,
+        aspects: feedback.aspects.length,
+        provider: feedback.providerKey ?? 'unknown',
+        photoCount: feedback.sourcePhotoCount ?? 0,
+      });
+      return feedback;
+    });
+  }
+
+  async forJob(jobId: UUID): Promise<LikenessFeedback | null> {
+    return read((db) => db.likenessFeedback.find((item) => item.jobId === jobId) ?? null);
+  }
+}
+
 /* ------------------------------------------------------------------ admin */
 
 class LocalAdminGateway implements AdminGateway {
@@ -1150,6 +1216,7 @@ export class LocalBackend implements MemoryBackend {
   readonly memories = new LocalMemoryRepository();
   readonly assets = new LocalAssetRepository();
   readonly threeD = new LocalThreeDGateway();
+  readonly likeness = new LocalLikenessGateway();
   readonly admin = new LocalAdminGateway();
   readonly capsule = new LocalCapsuleGateway();
 }

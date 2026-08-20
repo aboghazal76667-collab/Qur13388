@@ -217,6 +217,24 @@ export interface Strings {
     continueAnyway: string;
     chooseBetterPhoto: string;
   };
+  likeness: {
+    question: string;
+    subtitle: string;
+    comparePhotos: string;
+    looksGreat: string;
+    needsWork: string;
+    whatNeedsWork: string;
+    aspectFace: string;
+    aspectBody: string;
+    aspectClothes: string;
+    aspectOverall: string;
+    noteLabel: string;
+    notePlaceholder: string;
+    submit: string;
+    thanks: string;
+    thanksBody: string;
+    why: string;
+  };
   settings: {
     title: string;
     account: string;
@@ -528,6 +546,24 @@ export const en: Strings = {
     qualityGateBody: 'A clearer, full-body photo usually gives a much better figurine. You can continue anyway.',
     continueAnyway: 'Continue anyway',
     chooseBetterPhoto: 'Choose another photo',
+  },
+  likeness: {
+    question: 'Does this look like your child?',
+    subtitle: 'Your answer helps us make the next one better.',
+    comparePhotos: 'Your photos',
+    looksGreat: 'Looks great',
+    needsWork: 'Not quite',
+    whatNeedsWork: 'What would you change?',
+    aspectFace: 'The face',
+    aspectBody: 'The body',
+    aspectClothes: 'The clothes',
+    aspectOverall: 'It just doesn’t look like them',
+    noteLabel: 'Anything else?',
+    notePlaceholder: 'In your own words…',
+    submit: 'Send',
+    thanks: 'Thank you',
+    thanksBody: 'This is exactly what helps us improve.',
+    why: 'Kept to compare how well different methods capture a likeness. Never shared.',
   },
   settings: {
     title: 'Settings',

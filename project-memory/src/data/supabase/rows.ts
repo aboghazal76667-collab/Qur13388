@@ -1,6 +1,7 @@
 import type {
   Asset,
   ChildTrait,
+  LikenessFeedback,
   AuditEvent,
   CapsuleMessage,
   Child,
@@ -421,6 +422,42 @@ export function toChildTrait(row: ChildTraitRow): ChildTrait {
     observedTo: row.observed_to,
     ageMonthsAtRecord: row.age_months_at_record,
     note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export interface LikenessFeedbackRow {
+  id: string;
+  family_id: string;
+  job_id: string;
+  model_id: string | null;
+  child_id: string;
+  submitted_by: string;
+  verdict: string;
+  aspects: string[] | null;
+  note: string | null;
+  provider_key: string | null;
+  source_photo_count: number | null;
+  readiness_score: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function toLikenessFeedback(row: LikenessFeedbackRow): LikenessFeedback {
+  return {
+    id: row.id,
+    familyId: row.family_id,
+    jobId: row.job_id,
+    modelId: row.model_id,
+    childId: row.child_id,
+    submittedBy: row.submitted_by,
+    verdict: row.verdict === 'good' ? 'good' : 'needs_work',
+    aspects: (row.aspects ?? []) as LikenessFeedback['aspects'],
+    note: row.note,
+    providerKey: row.provider_key,
+    sourcePhotoCount: row.source_photo_count,
+    readinessScore: row.readiness_score,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

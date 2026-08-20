@@ -264,6 +264,33 @@ export interface ProviderCall extends Entity {
   errorCode: string | null;
 }
 
+/**
+ * What a parent said about the likeness.
+ *
+ * Coarse on purpose: a five-star scale invites precision nobody has, whereas
+ * "the face needs work" is easy to give and directly actionable.
+ */
+export type LikenessVerdict = 'good' | 'needs_work';
+
+export type LikenessAspect = 'face' | 'body' | 'clothes' | 'overall';
+
+export interface LikenessFeedback extends Entity {
+  familyId: UUID;
+  jobId: UUID;
+  modelId: UUID | null;
+  childId: UUID;
+  submittedBy: UUID;
+  verdict: LikenessVerdict;
+  /** Empty when the verdict is 'good'. */
+  aspects: LikenessAspect[];
+  note: string | null;
+  /** Context, so a year of feedback stays interpretable as things change. */
+  providerKey: string | null;
+  sourcePhotoCount: number | null;
+  /** Lets us learn whether our own readiness guidance predicts a good result. */
+  readinessScore: number | null;
+}
+
 export type QaDecision = 'approved' | 'needs_regeneration' | 'needs_manual_adjustment' | 'rejected';
 
 export interface QaReview extends Entity {

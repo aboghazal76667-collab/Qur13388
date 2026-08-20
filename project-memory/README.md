@@ -67,7 +67,10 @@ Being precise about this matters more than making the product sound finished.
 - Onboarding, sign-up and sign-in
 - Family dashboard, child profiles, ages and upcoming birthdays
 - Memory creation with up to 5 photos, notes and a message for later
-- Photo quality scoring, with plain-language advice, and a warning before a weak photo is sent for generation
+- Child identity: what each child loves, recorded as history so it can change as they grow
+- 3D readiness: genuine pixel analysis of each photo, plus coverage guidance across the set
+- A real 3D viewer rendering the actual generated model, with drag and pinch
+- Likeness feedback: "does this look like your child?", kept for comparing methods
 - 3D generation as a complete workflow: request, progress, failure, retry, result
 - The archive across every child, with year grouping
 - Settings, language switching (English and Arabic), privacy controls, data export, deletion
@@ -80,9 +83,13 @@ Being precise about this matters more than making the product sound finished.
   including occasional failures, and produces a demo figurine drawn on the
   device. It never pretends to be a likeness of your child. Connecting Meshy is
   a config change — see [AI_PROVIDERS.md](docs/AI_PROVIDERS.md).
-- **Photo quality is scored from image properties**, not yet from a vision
-  model that finds faces. The panel says so. The abstraction is built so a real
-  analyzer replaces it without any screen changing.
+- **3D readiness measures real pixels but cannot see faces or bodies.** Blur,
+  exposure, framing, background and duplicates are genuinely measured. Person,
+  face, body and view detection are not implemented — the app says so, and asks
+  the parent which photo shows what rather than guessing.
+- **Printability is never checked.** No provider assesses it and we have not
+  written our own pass, so the result screen says "Print check: Not performed"
+  and human QA is the gate before anything is manufactured.
 - **Apple and Google sign-in** are architected but not credentialed. The buttons
   explain that rather than failing silently.
 - **Memory plans** show pricing placeholders. No payment provider is connected

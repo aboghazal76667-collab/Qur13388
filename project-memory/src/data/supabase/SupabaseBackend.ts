@@ -11,6 +11,7 @@ import type {
   Asset,
   AuditEvent,
   ChildTrait,
+  LikenessFeedback,
   CapsuleMessage,
   Child,
   Family,
@@ -41,8 +42,10 @@ import type {
   MemoryWithAssets,
   SignInInput,
   SignUpInput,
+  LikenessGateway,
   RecordTraitInput,
   StartGenerationInput,
+  SubmitLikenessInput,
   ThreeDGateway,
   TraitRepository,
 } from '../backend';
@@ -55,6 +58,7 @@ import {
   toChild,
   toChildTrait,
   toFamily,
+  toLikenessFeedback,
   toJob,
   toMemory,
   toModel,
@@ -67,6 +71,7 @@ import {
   type ChildRow,
   type ChildTraitRow,
   type FamilyRow,
+  type LikenessFeedbackRow,
   type JobRow,
   type MemoryRow,
   type ModelRow,
@@ -1026,6 +1031,76 @@ class SupabaseCapsuleGateway implements CapsuleGateway {
   }
 }
 
+/* ---------------------------------------------------------- likeness ---- */
+
+class SupabaseLikenessGateway implements LikenessGateway {
+  constructor(
+    private readonly client: SupabaseClient,
+    private readonly familyId: () => UUID,
+  ) {}
+
+  async submit(input: SubmitLikenessInput): Promise<LikenessFeedback> {
+    const { data: userData } = await this.client.auth.getUser();
+    const submittedBy = userData.user?.id;
+    if (!submittedBy) throw new AppError('auth');
+
+    const { data: job, error: jobError } = await this.client
+      .from('three_d_jobs')
+      .select('id, child_id, provider_key, source_asset_ids')
+      .eq('id', input.jobId)
+      .maybeSingle<{ id: string; child_id: string; provider_key: string | null; source_asset_ids: string[] | null }>();
+    if (jobError) fail('load job for feedback', jobError);
+    if (!job) throw new AppError('not_found', 'job');
+
+    const { data: model } = await this.client
+      .from('three_d_models')
+      .select('id')
+      .eq('job_id', input.jobId)
+      .maybeSingle<{ id: string }>();
+
+    const { data, error } = await this.client
+      .from('likeness_feedback')
+      .upsert(
+        {
+          family_id: this.familyId(),
+          job_id: input.jobId,
+          model_id: model?.id ?? null,
+          child_id: job.child_id,
+          submitted_by: submittedBy,
+          verdict: input.verdict,
+          // A 'good' verdict carries no complaints, whatever was passed.
+          aspects: input.verdict === 'good' ? [] : (input.aspects ?? []),
+          note: input.note?.trim() || null,
+          provider_key: job.provider_key,
+          source_photo_count: (job.source_asset_ids ?? []).length,
+          readiness_score: input.readinessScore ?? null,
+        },
+        { onConflict: 'job_id' },
+      )
+      .select('*')
+      .single<LikenessFeedbackRow>();
+    if (error) fail('submit likeness feedback', error);
+
+    analytics.track('likeness_submitted', {
+      verdict: input.verdict,
+      aspects: (input.aspects ?? []).length,
+      provider: job.provider_key ?? 'unknown',
+      photoCount: (job.source_asset_ids ?? []).length,
+    });
+    return toLikenessFeedback(data);
+  }
+
+  async forJob(jobId: UUID): Promise<LikenessFeedback | null> {
+    const { data, error } = await this.client
+      .from('likeness_feedback')
+      .select('*')
+      .eq('job_id', jobId)
+      .maybeSingle<LikenessFeedbackRow>();
+    if (error) fail('get likeness feedback', error);
+    return data ? toLikenessFeedback(data) : null;
+  }
+}
+
 /* ------------------------------------------------------------------ admin */
 
 class SupabaseAdminGateway implements AdminGateway {
@@ -1134,6 +1209,7 @@ export class SupabaseBackend implements MemoryBackend {
   readonly memories: MemoryRepository;
   readonly assets: AssetRepository;
   readonly threeD: ThreeDGateway;
+  readonly likeness: LikenessGateway;
   readonly admin: AdminGateway;
   readonly capsule: CapsuleGateway;
 
@@ -1192,6 +1268,7 @@ export class SupabaseBackend implements MemoryBackend {
     this.memories = new SupabaseMemoryRepository(this.client, familyId);
     this.assets = new SupabaseAssetRepository(this.client, familyId);
     this.threeD = new SupabaseThreeDGateway(this.client);
+    this.likeness = new SupabaseLikenessGateway(this.client, familyId);
     this.admin = new SupabaseAdminGateway(this.client, () => this.cachedIsStaff);
     this.capsule = new SupabaseCapsuleGateway(this.client);
   }

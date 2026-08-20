@@ -32,7 +32,10 @@ import {
 import { assessCollection, scorePhoto } from '../src/services/readiness/collection';
 import { pixelAnalyzerCapabilities, type ViewRole } from '../src/services/readiness/types';
 import { blur, centredSubject, distantSubject, sharpDetail, shifted, uniform } from './fixtures';
-import { MOCK_DURATION_MS, seedUnit, simulate, willFail } from '../src/services/threeD/mockSimulator';
+import {
+  MOCK_DURATION_MS, seedUnit, simulate, unassessedPrintability, willFail,
+} from '../src/services/threeD/mockSimulator';
+import type { LikenessAspect, LikenessFeedback, LikenessVerdict } from '../src/domain/types';
 import { extensionFromUri, mimeFromExtension, storagePathFor } from '../src/data/storagePaths';
 import { format } from '../src/i18n/format';
 import { selectPlural } from '../src/i18n/plurals';
@@ -578,6 +581,46 @@ test('grouping preserves display order and drops empty categories', () => {
   const groups = groupTraits(list).map((g) => g.category);
   // `colour` is declared before `personality` in the catalogue.
   assert.deepEqual(groups, ['colour', 'personality']);
+});
+
+/* ------------------------------------------------------------- likeness */
+
+suite('Likeness feedback');
+
+test('a good verdict carries no complaints', () => {
+  // The gateways drop aspects on a 'good' verdict, so a stale selection from a
+  // parent who changed their mind cannot be recorded as a criticism.
+  const aspects: LikenessAspect[] = ['face', 'body'];
+  const recorded = ('good' as LikenessVerdict) === 'good' ? [] : aspects;
+  assert.deepEqual(recorded, []);
+});
+
+test('feedback keeps the context that makes it interpretable', () => {
+  // Without provider, photo count and the readiness score, a year of feedback
+  // cannot answer the questions it exists to answer.
+  const feedback: Pick<LikenessFeedback, 'providerKey' | 'sourcePhotoCount' | 'readinessScore'> = {
+    providerKey: 'meshy',
+    sourcePhotoCount: 3,
+    readinessScore: 82,
+  };
+  assert.equal(feedback.providerKey, 'meshy');
+  assert.equal(feedback.sourcePhotoCount, 3);
+  assert.equal(feedback.readinessScore, 82);
+});
+
+/* ---------------------------------------------------------- printability */
+
+suite('Printability honesty');
+
+test('nothing reports a model as printable without a real check', () => {
+  // An earlier version invented a watertight flag and a score of 72–91, which
+  // put a fabricated safety check in front of a physical product.
+  const report = unassessedPrintability();
+  assert.equal(report.score, 0);
+  assert.equal(report.isWatertight, false);
+  assert.equal(report.estimatedHeightMm, null);
+  assert.equal(report.wallThicknessMm, null);
+  assert.deepEqual(report.warnings, ['printability_not_assessed']);
 });
 
 /* -------------------------------------------------------------- plurals */

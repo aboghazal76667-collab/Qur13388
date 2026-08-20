@@ -32,6 +32,7 @@ export type AnalyticsEventName =
   | 'three_d_failed'
   | 'three_d_retried'
   | 'three_d_saved_to_timeline'
+  | 'likeness_submitted'
   | 'order_intent'
   | 'app_opened'
   | 'privacy_viewed'
