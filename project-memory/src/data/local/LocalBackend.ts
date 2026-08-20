@@ -1,4 +1,5 @@
 import { AppError } from '@/lib/errors';
+import { ageOn, todayIso, traitValueKey } from '@/domain';
 import { newId, nowIso } from '@/lib/ids';
 import { log } from '@/lib/log';
 import { analytics } from '@/services/analytics';
@@ -13,6 +14,7 @@ import { floorProgressFor, stageIndexFor } from '@/services/threeD/pipeline';
 import type {
   Asset,
   AuditEvent,
+  ChildTrait,
   CapsuleMessage,
   Child,
   Family,
@@ -45,8 +47,10 @@ import type {
   MemoryWithAssets,
   SignInInput,
   SignUpInput,
+  RecordTraitInput,
   StartGenerationInput,
   ThreeDGateway,
+  TraitRepository,
 } from '../backend';
 import {
   deleteLocalFile,
@@ -418,6 +422,7 @@ class LocalChildRepository implements ChildRepository {
       db.jobs = db.jobs.filter((item) => item.childId !== childId);
       db.models = db.models.filter((item) => item.childId !== childId);
       db.capsuleMessages = db.capsuleMessages.filter((item) => item.childId !== childId);
+      db.childTraits = db.childTraits.filter((item) => item.childId !== childId);
       db.qualityReports = db.qualityReports.filter(
         (report) => !memoryIds.has(report.assetId) && db.assets.some((a) => a.id === report.assetId),
       );
@@ -458,6 +463,123 @@ async function storeAvatar(familyId: UUID, childId: UUID, uri: string): Promise<
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+/* ------------------------------------------------------------- traits ---- */
+
+/**
+ * Child identity and interests, on the device.
+ *
+ * The whole point of `record` and `retire` rather than `update` is that a
+ * child's interests are history, not settings: moving on from unicorns closes
+ * that period, it does not erase it.
+ */
+class LocalTraitRepository implements TraitRepository {
+  async listForChild(childId: UUID): Promise<ChildTrait[]> {
+    return read((db) => {
+      if (!db.session) return [];
+      return db.childTraits
+        .filter((item) => item.childId === childId && item.familyId === db.session!.familyId)
+        .sort((a, b) => b.observedFrom.localeCompare(a.observedFrom));
+    });
+  }
+
+  async record(input: RecordTraitInput): Promise<ChildTrait> {
+    const value = input.value.trim();
+    if (value.length === 0) throw new AppError('validation', 'empty trait value');
+
+    const context = await read((db) => {
+      if (!db.session) return null;
+      const child = db.children.find(
+        (item) => item.id === input.childId && item.familyId === db.session!.familyId,
+      );
+      return child ? { child, familyId: db.session.familyId } : null;
+    });
+    if (!context) throw new AppError('not_found', 'child');
+
+    const key = traitValueKey(value);
+
+    return transact((db) => {
+      const existing = db.childTraits.find(
+        (item) =>
+          item.childId === input.childId &&
+          item.category === input.category &&
+          item.valueKey === key &&
+          item.isCurrent,
+      );
+      // Recording something already current is a no-op rather than a duplicate.
+      if (existing) return existing;
+
+      const timestamp = nowIso();
+      const trait: ChildTrait = {
+        id: newId(),
+        familyId: context.familyId,
+        childId: input.childId,
+        category: input.category,
+        value,
+        valueKey: key,
+        customLabel: input.customLabel?.trim() || null,
+        source: input.source ?? 'parent',
+        // A parent recording something has confirmed it by definition.
+        confirmedAt: (input.source ?? 'parent') === 'parent' ? timestamp : null,
+        isCurrent: true,
+        observedFrom: todayIso(),
+        observedTo: null,
+        ageMonthsAtRecord: ageOn(context.child.dateOfBirth).totalMonths,
+        note: input.note?.trim() || null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+
+      db.childTraits = [...db.childTraits, trait];
+      audit(db, 'trait.recorded', 'child_trait', trait.id, { category: trait.category });
+      analytics.track('trait_recorded', { category: trait.category, source: trait.source });
+      return trait;
+    });
+  }
+
+  private patch(traitId: UUID, mutate: (trait: ChildTrait) => ChildTrait): Promise<ChildTrait> {
+    return transact((db) => {
+      const { familyId } = requireSession(db);
+      const index = db.childTraits.findIndex(
+        (item) => item.id === traitId && item.familyId === familyId,
+      );
+      if (index < 0) throw new AppError('not_found', 'trait');
+      const updated = touch(mutate(db.childTraits[index]));
+      db.childTraits = db.childTraits.map((item, i) => (i === index ? updated : item));
+      return updated;
+    });
+  }
+
+  retire(traitId: UUID): Promise<ChildTrait> {
+    return this.patch(traitId, (trait) => ({
+      ...trait,
+      isCurrent: false,
+      observedTo: todayIso(),
+    }));
+  }
+
+  restore(traitId: UUID): Promise<ChildTrait> {
+    return this.patch(traitId, (trait) => ({ ...trait, isCurrent: true, observedTo: null }));
+  }
+
+  confirm(traitId: UUID): Promise<ChildTrait> {
+    return this.patch(traitId, (trait) => ({
+      ...trait,
+      source: 'parent',
+      confirmedAt: nowIso(),
+    }));
+  }
+
+  async remove(traitId: UUID): Promise<void> {
+    await transact((db) => {
+      const { familyId } = requireSession(db);
+      db.childTraits = db.childTraits.filter(
+        (item) => !(item.id === traitId && item.familyId === familyId),
+      );
+      audit(db, 'trait.deleted', 'child_trait', traitId);
+    });
+  }
 }
 
 /* --------------------------------------------------------------- memories */
@@ -1070,6 +1192,7 @@ export class LocalBackend implements MemoryBackend {
   readonly auth = new LocalAuthGateway();
   readonly family = new LocalFamilyGateway();
   readonly children = new LocalChildRepository();
+  readonly traits = new LocalTraitRepository();
   readonly memories = new LocalMemoryRepository();
   readonly assets = new LocalAssetRepository();
   readonly threeD = new LocalThreeDGateway();

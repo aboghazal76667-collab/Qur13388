@@ -3,13 +3,14 @@ import { Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { ageOn, nextBirthday, occasionLabel, type Child } from '@/domain';
+import { nextBirthday, occasionLabel, type Child, type ChildTrait } from '@/domain';
 import { useI18n } from '@/i18n';
 import { friendlyMessage } from '@/lib/errors';
 import { useTheme } from '@/theme';
 import { getBackend } from '@/data';
 import { useArchive } from '@/state/archive';
 import { describeAge, describeMemoryCount, describeTurning } from '@/features/child/age';
+import { AboutChild } from '@/features/traits/AboutChild';
 import { Timeline } from '@/features/child/Timeline';
 import { useMemoryCovers } from '@/features/child/useChildScreen';
 import { useAvatarUri } from '@/features/family/useAvatar';
@@ -31,6 +32,7 @@ export default function ChildProfile() {
   const removeChild = useArchive((state) => state.removeChild);
 
   const [child, setChild] = useState<Child | null>(null);
+  const [traits, setTraits] = useState<ChildTrait[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const memories = memoriesByChild[childId ?? ''] ?? [];
@@ -49,6 +51,11 @@ export default function ChildProfile() {
           .catch((loadError) => setError(friendlyMessage(loadError, t.errors)));
       }
       loadChild(childId);
+      // Identity is a small read and belongs with the profile, not behind a tap.
+      getBackend()
+        .traits.listForChild(childId)
+        .then(setTraits)
+        .catch(() => setTraits([]));
     }, [childId, children, loadChild, t.errors]),
   );
 
@@ -63,7 +70,6 @@ export default function ChildProfile() {
     );
   }
 
-  const age = ageOn(child.dateOfBirth);
   const birthday = nextBirthday(child.dateOfBirth);
   const ageLabel = describeAge(child.dateOfBirth, t, formatNumber);
 
@@ -145,6 +151,14 @@ export default function ChildProfile() {
             {ageLabel} · {format(t.child.born, { date: formatDate(child.dateOfBirth, 'long') })}
           </Text>
         </View>
+      </View>
+
+      <View style={{ paddingBottom: theme.spacing.xl }}>
+        <AboutChild
+          childName={child.firstName}
+          traits={traits}
+          onEdit={() => router.push(`/traits/${child.id}`)}
+        />
       </View>
 
       {upcoming.length > 0 ? (

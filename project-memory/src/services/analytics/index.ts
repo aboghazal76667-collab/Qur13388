@@ -22,6 +22,8 @@ export type AnalyticsEventName =
   | 'account_created'
   | 'signed_in'
   | 'child_created'
+  | 'trait_recorded'
+  | 'trait_retired'
   | 'memory_created'
   | 'photo_added'
   | 'photo_quality_checked'

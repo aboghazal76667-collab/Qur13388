@@ -95,6 +95,33 @@ export interface Strings {
     deleteChild: string;
     deleteChildConfirm: string;
   };
+  traits: {
+    aboutTitle: string;
+    introTitle: string;
+    introBody: string;
+    introStart: string;
+    addLater: string;
+    editTitle: string;
+    edit: string;
+    tellUsMore: string;
+    addYourOwn: string;
+    addValue: string;
+    suggestions: string;
+    nowLoving: string;
+    usedToLove: string;
+    movedOn: string;
+    bringBack: string;
+    remove: string;
+    customLabel: string;
+    customLabelHint: string;
+    empty: string;
+    emptyBody: string;
+    savedCount: string;
+    personalisationNote: string;
+    suggestionPending: string;
+    confirmSuggestion: string;
+    done: string;
+  };
   memory: {
     newTitle: string;
     kindQuestion: string;
@@ -336,6 +363,35 @@ export const en: Strings = {
     newborn: 'Newborn',
     deleteChild: 'Delete this profile',
     deleteChildConfirm: 'This permanently removes {name}’s profile, memories and photos. This cannot be undone.',
+  },
+  traits: {
+    aboutTitle: 'About {name}',
+    introTitle: 'Tell us a little about {name}',
+    introBody:
+      'Knowing what {name} loves helps Project Memory make her memories more personal. Add as much or as little as you like — there is no hurry.',
+    introStart: 'Tell us about {name}',
+    addLater: 'Add later',
+    editTitle: 'About {name}',
+    edit: 'Edit',
+    tellUsMore: 'Tell us more about {name}',
+    addYourOwn: 'Add your own',
+    addValue: 'Add',
+    suggestions: 'Suggestions',
+    nowLoving: 'Loves now',
+    usedToLove: 'Used to love',
+    movedOn: 'Moved on from this',
+    bringBack: 'Loves this again',
+    remove: 'Remove',
+    customLabel: 'What is this?',
+    customLabelHint: 'For example: favourite team, favourite app.',
+    empty: 'Nothing here yet',
+    emptyBody: 'Add the first thing {name} loves.',
+    savedCount: '{count} saved',
+    personalisationNote:
+      'Used only to make keepsakes and stories feel like theirs. Nothing is shared, and nothing changes your photos or memories.',
+    suggestionPending: 'Suggested — is this right?',
+    confirmSuggestion: 'Yes, that’s right',
+    done: 'Done',
   },
   memory: {
     newTitle: 'Add a memory',

@@ -1,5 +1,6 @@
 import type {
   Asset,
+  ChildTrait,
   AuditEvent,
   CapsuleMessage,
   Child,
@@ -382,5 +383,45 @@ export function toAudit(row: AuditRow): AuditEvent {
     meta: row.meta ?? {},
     createdAt: row.created_at,
     updatedAt: row.created_at,
+  };
+}
+
+export interface ChildTraitRow {
+  id: string;
+  family_id: string;
+  child_id: string;
+  category: string;
+  value: string;
+  value_key: string;
+  custom_label: string | null;
+  source: string;
+  confirmed_at: string | null;
+  is_current: boolean;
+  observed_from: string;
+  observed_to: string | null;
+  age_months_at_record: number | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function toChildTrait(row: ChildTraitRow): ChildTrait {
+  return {
+    id: row.id,
+    familyId: row.family_id,
+    childId: row.child_id,
+    category: row.category as ChildTrait['category'],
+    value: row.value,
+    valueKey: row.value_key,
+    customLabel: row.custom_label,
+    source: row.source === 'suggested' ? 'suggested' : 'parent',
+    confirmedAt: row.confirmed_at,
+    isCurrent: row.is_current,
+    observedFrom: row.observed_from,
+    observedTo: row.observed_to,
+    ageMonthsAtRecord: row.age_months_at_record,
+    note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

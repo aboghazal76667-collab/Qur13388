@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { parseIsoDate, todayIso } from '@/domain';
+import { parseIsoDate, todayIso, type Child } from '@/domain';
 import { useI18n } from '@/i18n';
 import { friendlyMessage } from '@/lib/errors';
 import { useTheme } from '@/theme';
@@ -22,7 +22,7 @@ import { Avatar, Banner, Button, DateField, Field, Screen, ScreenHeader, Text } 
 export default function NewChild() {
   const theme = useTheme();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const addChild = useArchive((state) => state.addChild);
 
   const [firstName, setFirstName] = useState('');
@@ -32,6 +32,7 @@ export default function NewChild() {
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [created, setCreated] = useState<Child | null>(null);
 
   const choosePhoto = async () => {
     try {
@@ -67,12 +68,58 @@ export default function NewChild() {
         dateOfBirth,
         avatarUri,
       });
-      router.replace(`/child/${child.id}`);
+      // The invitation to describe the child comes *after* creation, never
+      // before it: a parent must be able to add a child in under a minute, and
+      // a questionnaire in front of that would cost us the child entirely.
+      setCreated(child);
     } catch (error) {
       setFormError(friendlyMessage(error, t.errors));
       setSaving(false);
     }
   };
+
+  if (created) {
+    return (
+      <Screen
+        footer={
+          <View style={{ gap: theme.spacing.md }}>
+            <Button
+              label={format(t.traits.introStart, { name: created.firstName })}
+              onPress={() => router.replace(`/traits/${created.id}`)}
+              emphasise
+            />
+            <Button
+              label={t.traits.addLater}
+              variant="ghost"
+              size="medium"
+              onPress={() => router.replace(`/child/${created.id}`)}
+            />
+          </View>
+        }
+      >
+        <ScreenHeader showBack={false} />
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: theme.spacing.xl,
+            paddingVertical: theme.spacing.xxxl,
+          }}
+        >
+          <Avatar name={created.firstName} uri={avatarUri} size={96} />
+          <View style={{ gap: theme.spacing.md }}>
+            <Text variant="title" align="center" autoAlign={false} accessibilityRole="header">
+              {format(t.traits.introTitle, { name: created.firstName })}
+            </Text>
+            <Text variant="body" color="textMuted" align="center" autoAlign={false}>
+              {format(t.traits.introBody, { name: created.firstName })}
+            </Text>
+          </View>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen

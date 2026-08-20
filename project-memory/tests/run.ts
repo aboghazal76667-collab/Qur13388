@@ -15,6 +15,16 @@ import assert from 'node:assert/strict';
 import { ageOn, nextBirthday, parseIsoDate, timelineYears, toIsoDate } from '../src/domain/age';
 import { occasionCatalogue, occasionLabel } from '../src/domain/occasions';
 import { presentationFor, memoryKindPresentation } from '../src/domain/memoryKinds';
+import {
+  currentTraits,
+  groupTraits,
+  pastTraits,
+  traitCategories,
+  traitCategoryFor,
+  traitValueKey,
+  traitsAtAgeMonths,
+  type ChildTrait,
+} from '../src/domain/traits';
 import { HeuristicPhotoQualityAnalyzer } from '../src/services/photoQuality/heuristic';
 import { verdictFor } from '../src/services/photoQuality/types';
 import { floorProgressFor, isAwaitingResult, isFailed, stageIndexFor } from '../src/services/threeD/pipeline';
@@ -414,6 +424,122 @@ test('the generation copy never mentions AI machinery', () => {
       assert.ok(!words.includes(term), `stage "${stage}" mentions "${term}"`);
     }
   }
+});
+
+/* ------------------------------------------------------- child identity */
+
+suite('Child identity and interests');
+
+function trait(over: Partial<ChildTrait> = {}): ChildTrait {
+  return {
+    id: over.id ?? 'trait-1',
+    familyId: 'fam',
+    childId: 'child',
+    category: over.category ?? 'animal',
+    value: over.value ?? 'Unicorns',
+    valueKey: traitValueKey(over.value ?? 'Unicorns'),
+    customLabel: null,
+    source: over.source ?? 'parent',
+    confirmedAt: over.confirmedAt ?? '2026-01-01T00:00:00Z',
+    isCurrent: over.isCurrent ?? true,
+    observedFrom: over.observedFrom ?? '2025-06-01',
+    observedTo: over.observedTo ?? null,
+    ageMonthsAtRecord: over.ageMonthsAtRecord ?? 49,
+    note: null,
+    createdAt: '2025-06-01T00:00:00Z',
+    updatedAt: '2025-06-01T00:00:00Z',
+  };
+}
+
+test('value keys fold case and spacing so duplicates collide', () => {
+  assert.equal(traitValueKey('Unicorns'), traitValueKey('  unicorns  '));
+  assert.equal(traitValueKey('Ice   Cream'), 'ice cream');
+});
+
+test('Arabic values fold without being mangled', () => {
+  // An ASCII-only rule would destroy these. The key must stay Arabic.
+  assert.equal(traitValueKey('  الرسم '), 'الرسم');
+  assert.equal(traitValueKey('الرسم'), traitValueKey('الرسم '));
+  assert.notEqual(traitValueKey('الرسم'), traitValueKey('السباحة'));
+});
+
+test('only parent-confirmed current traits form the child portrait', () => {
+  // An unconfirmed suggestion must never be shown as something the child loves.
+  const list = [
+    trait({ id: 'a', value: 'Unicorns' }),
+    trait({ id: 'b', value: 'Horses', source: 'suggested', confirmedAt: null }),
+    trait({ id: 'c', value: 'Dinosaurs', isCurrent: false, observedTo: '2026-01-01' }),
+  ];
+  const shown = currentTraits(list).map((item) => item.value);
+  assert.deepEqual(shown, ['Unicorns']);
+});
+
+test('retiring an interest keeps it in the archive', () => {
+  const list = [
+    trait({ id: 'a', value: 'Unicorns', isCurrent: false, observedTo: '2028-01-15' }),
+    trait({ id: 'b', value: 'Space', observedFrom: '2028-01-20' }),
+  ];
+  assert.deepEqual(currentTraits(list).map((x) => x.value), ['Space']);
+  assert.deepEqual(pastTraits(list).map((x) => x.value), ['Unicorns']);
+});
+
+test('the archive can answer what she loved at five, and what she loves now', () => {
+  // The question the whole model exists for.
+  const dob = '2021-04-12';
+  const list = [
+    trait({ id: 'a', value: 'Unicorns', observedFrom: '2025-06-01', observedTo: '2028-01-15', isCurrent: false }),
+    trait({ id: 'b', value: 'Space', observedFrom: '2028-01-20', category: 'obsession' }),
+  ];
+
+  const atFour = traitsAtAgeMonths(list, dob, 50).map((x) => x.value);
+  const atSeven = traitsAtAgeMonths(list, dob, 84).map((x) => x.value);
+
+  assert.deepEqual(atFour, ['Unicorns']);
+  assert.deepEqual(atSeven, ['Space']);
+});
+
+test('an interest can return years later without erasing the first period', () => {
+  const dob = '2021-04-12';
+  const list = [
+    trait({ id: 'a', value: 'Unicorns', observedFrom: '2025-06-01', observedTo: '2026-06-01', isCurrent: false }),
+    trait({ id: 'b', value: 'Unicorns', observedFrom: '2030-02-01' }),
+  ];
+  // Born 2021-04-12, so: 50 months is inside the first period (2025-06 to
+  // 2026-06), 81 months falls in the gap (2028-01), 110 months is inside the
+  // second (from 2030-02).
+  assert.equal(traitsAtAgeMonths(list, dob, 50).length, 1);
+  assert.equal(traitsAtAgeMonths(list, dob, 81).length, 0);
+  assert.equal(traitsAtAgeMonths(list, dob, 110).length, 1);
+});
+
+test('every category is labelled and prompted in both languages', () => {
+  for (const presentation of traitCategories) {
+    assert.ok(presentation.labelEn.length > 0, presentation.category);
+    assert.ok(presentation.labelAr.length > 0, presentation.category);
+    assert.ok(presentation.promptAr.includes('{name}'), presentation.category);
+    // Arabic suggestions must be written in Arabic, not transliterated.
+    for (const suggestion of presentation.suggestionsAr) {
+      assert.ok(/[\u0600-\u06FF]/.test(suggestion), `${presentation.category}: ${suggestion}`);
+    }
+  }
+});
+
+test('personality wording stays parent-facing, not clinical', () => {
+  // This is a memory feature, not an assessment. Clinical vocabulary here
+  // would be both wrong and a claim we have no business making.
+  const clinical = ['disorder', 'syndrome', 'deficit', 'diagnosis', 'adhd', 'autistic', 'anxious', 'depressed'];
+  const words = traitCategoryFor('personality').suggestionsEn.map((w) => w.toLowerCase());
+  for (const term of clinical) {
+    assert.ok(!words.includes(term), `personality suggests "${term}"`);
+  }
+  assert.ok(words.includes('curious') && words.includes('gentle'));
+});
+
+test('grouping preserves display order and drops empty categories', () => {
+  const list = [trait({ id: 'a', category: 'personality', value: 'Curious' }), trait({ id: 'b', category: 'colour', value: 'Purple' })];
+  const groups = groupTraits(list).map((g) => g.category);
+  // `colour` is declared before `personality` in the catalogue.
+  assert.deepEqual(groups, ['colour', 'personality']);
 });
 
 /* -------------------------------------------------------------- plurals */

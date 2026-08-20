@@ -23,13 +23,16 @@
     "expo": "~57.0.14",
     "expo-constants": "~57.0.12",
     "expo-file-system": "~57.0.4",
+    "expo-gl": "~57.0.2",
     "expo-haptics": "~57.0.1",
+    "expo-image-manipulator": "~57.0.12",
     "expo-image-picker": "~17.0.9",
     "expo-linking": "~57.0.6",
     "expo-localization": "~17.0.7",
     "expo-router": "~57.0.14",
     "expo-splash-screen": "~57.0.7",
     "expo-status-bar": "~57.0.1",
+    "jpeg-js": "^0.4.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
@@ -39,11 +42,13 @@
     "react-native-svg": "15.15.4",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.21.2",
+    "three": "^0.185.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@types/react": "~19.2.2",
+    "@types/three": "^0.185.4",
     "tsx": "^4.19.2",
     "typescript": "~6.0.3"
   }

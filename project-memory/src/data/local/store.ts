@@ -6,6 +6,7 @@ import type {
   AuditEvent,
   CapsuleMessage,
   Child,
+  ChildTrait,
   Family,
   FamilyMember,
   Memory,
@@ -34,6 +35,7 @@ export interface Database {
   families: Family[];
   familyMembers: FamilyMember[];
   children: Child[];
+  childTraits: ChildTrait[];
   memories: Memory[];
   assets: Asset[];
   qualityReports: PhotoQualityReport[];
@@ -56,6 +58,7 @@ export function emptyDatabase(): Database {
     families: [],
     familyMembers: [],
     children: [],
+    childTraits: [],
     memories: [],
     assets: [],
     qualityReports: [],

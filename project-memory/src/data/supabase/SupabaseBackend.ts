@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { AppError } from '@/lib/errors';
+import { ageOn, todayIso, traitValueKey } from '@/domain';
 import { newId, nowIso } from '@/lib/ids';
 import { log } from '@/lib/log';
 import { env } from '@/lib/env';
@@ -9,6 +10,7 @@ import { floorProgressFor, stageIndexFor } from '@/services/threeD/pipeline';
 import type {
   Asset,
   AuditEvent,
+  ChildTrait,
   CapsuleMessage,
   Child,
   Family,
@@ -40,8 +42,10 @@ import type {
   MemoryWithAssets,
   SignInInput,
   SignUpInput,
+  RecordTraitInput,
   StartGenerationInput,
   ThreeDGateway,
+  TraitRepository,
 } from '../backend';
 import { extensionFromUri, mimeFromExtension, storagePathFor } from '../local/files';
 import { createSupabaseClient, PRIVATE_BUCKET, SIGNED_URL_TTL_SECONDS } from './client';
@@ -50,6 +54,7 @@ import {
   toAudit,
   toCapsule,
   toChild,
+  toChildTrait,
   toFamily,
   toJob,
   toMemory,
@@ -62,6 +67,7 @@ import {
   type AuditRow,
   type CapsuleRow,
   type ChildRow,
+  type ChildTraitRow,
   type FamilyRow,
   type JobRow,
   type MemoryRow,
@@ -450,6 +456,105 @@ class SupabaseChildRepository implements ChildRepository {
     const { error } = await this.client.from('children').delete().eq('id', childId);
     if (error) fail('delete child', error);
     analytics.track('content_deleted', { scope: 'child' });
+  }
+}
+
+/* ------------------------------------------------------------- traits ---- */
+
+class SupabaseTraitRepository implements TraitRepository {
+  constructor(
+    private readonly client: SupabaseClient,
+    private readonly familyId: () => UUID,
+  ) {}
+
+  async listForChild(childId: UUID): Promise<ChildTrait[]> {
+    const { data, error } = await this.client
+      .from('child_traits')
+      .select('*')
+      .eq('child_id', childId)
+      .order('observed_from', { ascending: false })
+      .returns<ChildTraitRow[]>();
+    if (error) fail('list traits', error);
+    return (data ?? []).map(toChildTrait);
+  }
+
+  async record(input: RecordTraitInput): Promise<ChildTrait> {
+    const value = input.value.trim();
+    if (value.length === 0) throw new AppError('validation', 'empty trait value');
+
+    const { data: child, error: childError } = await this.client
+      .from('children')
+      .select('date_of_birth')
+      .eq('id', input.childId)
+      .maybeSingle<{ date_of_birth: string }>();
+    if (childError) fail('load child for trait', childError);
+    if (!child) throw new AppError('not_found', 'child');
+
+    const key = traitValueKey(value);
+    const source = input.source ?? 'parent';
+
+    // Recording something already current is a no-op, not a duplicate. The
+    // partial unique index enforces this too; checking first keeps the common
+    // case from surfacing as an error.
+    const { data: existing } = await this.client
+      .from('child_traits')
+      .select('*')
+      .eq('child_id', input.childId)
+      .eq('category', input.category)
+      .eq('value_key', key)
+      .eq('is_current', true)
+      .maybeSingle<ChildTraitRow>();
+    if (existing) return toChildTrait(existing);
+
+    const { data, error } = await this.client
+      .from('child_traits')
+      .insert({
+        family_id: this.familyId(),
+        child_id: input.childId,
+        category: input.category,
+        value,
+        value_key: key,
+        custom_label: input.customLabel?.trim() || null,
+        source,
+        confirmed_at: source === 'parent' ? nowIso() : null,
+        age_months_at_record: ageOn(child.date_of_birth).totalMonths,
+        note: input.note?.trim() || null,
+      })
+      .select('*')
+      .single<ChildTraitRow>();
+    if (error) fail('record trait', error);
+
+    analytics.track('trait_recorded', { category: input.category, source });
+    return toChildTrait(data);
+  }
+
+  private async patch(traitId: UUID, row: Record<string, unknown>): Promise<ChildTrait> {
+    const { data, error } = await this.client
+      .from('child_traits')
+      .update({ ...row, updated_at: nowIso() })
+      .eq('id', traitId)
+      .select('*')
+      .single<ChildTraitRow>();
+    if (error) fail('update trait', error);
+    return toChildTrait(data);
+  }
+
+  retire(traitId: UUID): Promise<ChildTrait> {
+    analytics.track('trait_retired');
+    return this.patch(traitId, { is_current: false, observed_to: todayIso() });
+  }
+
+  restore(traitId: UUID): Promise<ChildTrait> {
+    return this.patch(traitId, { is_current: true, observed_to: null });
+  }
+
+  confirm(traitId: UUID): Promise<ChildTrait> {
+    return this.patch(traitId, { source: 'parent', confirmed_at: nowIso() });
+  }
+
+  async remove(traitId: UUID): Promise<void> {
+    const { error } = await this.client.from('child_traits').delete().eq('id', traitId);
+    if (error) fail('delete trait', error);
   }
 }
 
@@ -1096,6 +1201,7 @@ export class SupabaseBackend implements MemoryBackend {
   readonly auth: AuthGateway;
   readonly family: FamilyGateway;
   readonly children: ChildRepository;
+  readonly traits: TraitRepository;
   readonly memories: MemoryRepository;
   readonly assets: AssetRepository;
   readonly threeD: ThreeDGateway;
@@ -1153,6 +1259,7 @@ export class SupabaseBackend implements MemoryBackend {
 
     this.family = new SupabaseFamilyGateway(this.client, familyId);
     this.children = new SupabaseChildRepository(this.client, familyId);
+    this.traits = new SupabaseTraitRepository(this.client, familyId);
     this.memories = new SupabaseMemoryRepository(this.client, familyId);
     this.assets = new SupabaseAssetRepository(this.client, familyId);
     this.threeD = new SupabaseThreeDGateway(this.client);

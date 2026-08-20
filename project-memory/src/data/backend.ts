@@ -1,6 +1,7 @@
 import type {
   Asset,
   AuditEvent,
+  ChildTrait,
   CapsuleMessage,
   Child,
   Family,
@@ -14,6 +15,8 @@ import type {
   QaReview,
   ThreeDJob,
   ThreeDModel,
+  TraitCategory,
+  TraitSource,
   UUID,
 } from '@/domain';
 
@@ -55,6 +58,37 @@ export interface AuthGateway {
   /** Social sign-in is architected but not credentialed yet. */
   isSocialAvailable(provider: 'apple' | 'google'): boolean;
   signInWithProvider(provider: 'apple' | 'google'): Promise<AuthSession>;
+}
+
+export interface RecordTraitInput {
+  childId: UUID;
+  category: TraitCategory;
+  value: string;
+  customLabel?: string | null;
+  note?: string | null;
+  /** Defaults to `parent`; only a confirmed suggestion should pass anything else. */
+  source?: TraitSource;
+}
+
+/**
+ * Traits are an archive, not a settings screen.
+ *
+ * There is deliberately no `update(value)`: changing what a child loves means
+ * closing one period and opening another, so the history survives. `retire`
+ * and `record` are the only two verbs, which makes it structurally impossible
+ * to overwrite what she loved when she was five.
+ */
+export interface TraitRepository {
+  listForChild(childId: UUID): Promise<ChildTrait[]>;
+  record(input: RecordTraitInput): Promise<ChildTrait>;
+  /** Closes an open period — the child has moved on. */
+  retire(traitId: UUID): Promise<ChildTrait>;
+  /** Reopens a retired trait, for when a parent closed one by mistake. */
+  restore(traitId: UUID): Promise<ChildTrait>;
+  /** Removes a trait outright. For corrections, not for change over time. */
+  remove(traitId: UUID): Promise<void>;
+  /** Accepts a suggestion, making it parent-authoritative. */
+  confirm(traitId: UUID): Promise<ChildTrait>;
 }
 
 export interface CreateChildInput {
@@ -200,6 +234,7 @@ export interface MemoryBackend {
   readonly auth: AuthGateway;
   readonly family: FamilyGateway;
   readonly children: ChildRepository;
+  readonly traits: TraitRepository;
   readonly memories: MemoryRepository;
   readonly assets: AssetRepository;
   readonly threeD: ThreeDGateway;
