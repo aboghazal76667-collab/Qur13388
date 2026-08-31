@@ -1,0 +1,111 @@
+import type { PaletteSuggestion } from '@dd/domain/types';
+
+/**
+ * Six curated palettes, hand-checked rather than generated. They seed the home
+ * screen instantly (no engine run on first paint) and act as a quality floor:
+ * the harmony engine's output should look at least this considered.
+ */
+export const CURATED_PALETTES: PaletteSuggestion[] = [
+  {
+    id: 'pal_curated_1',
+    baseColorId: 'col_off_white',
+    threadColorIds: ['th_navy', 'th_silver'],
+    furakhaColorId: 'th_navy',
+    suggestedPatternId: 'emb_01',
+    personality: 'classic',
+    matchScore: 0.94,
+    harmony: 'neutral_accent',
+    reason: {
+      ar: 'الأبيض المكسور مع التطريز الكحلي يعطي مظهراً رسمياً هادئاً، بينما اللمسة الفضية تبرز النقش دون مبالغة.',
+      en: 'Off-white with navy embroidery reads quietly formal, while the silver accent lifts the pattern without shouting.',
+    },
+    occasion: 'friday',
+    season: 'all_year',
+    source: 'curated',
+  },
+  {
+    id: 'pal_curated_2',
+    baseColorId: 'col_ivory',
+    threadColorIds: ['th_deep_green', 'th_gold', 'th_ivory'],
+    furakhaColorId: 'th_gold',
+    suggestedPatternId: 'emb_03',
+    personality: 'luxe',
+    matchScore: 0.91,
+    harmony: 'analogous',
+    reason: {
+      ar: 'العاجي أساس دافئ يسمح للأخضر العميق بالظهور، والذهبي العتيق يضيف حضوراً مناسباً للعيد دون ثقل.',
+      en: 'Ivory is a warm ground that lets the deep green show, and antique gold adds Eid presence without heaviness.',
+    },
+    occasion: 'eid',
+    season: 'all_year',
+    source: 'curated',
+  },
+  {
+    id: 'pal_curated_3',
+    baseColorId: 'col_stone_grey',
+    threadColorIds: ['th_graphite', 'th_platinum'],
+    furakhaColorId: 'th_graphite',
+    suggestedPatternId: 'emb_04',
+    personality: 'formal',
+    matchScore: 0.88,
+    harmony: 'monochromatic',
+    reason: {
+      ar: 'تدرّج رمادي واحد من الفاتح إلى الداكن يعطي انضباطاً رسمياً، والبلاتيني يحافظ على وضوح النقش.',
+      en: 'A single grey gradation from light to dark reads formal, and platinum keeps the pattern legible.',
+    },
+    occasion: 'formal',
+    season: 'all_year',
+    source: 'curated',
+  },
+  {
+    id: 'pal_curated_4',
+    baseColorId: 'col_sand',
+    threadColorIds: ['th_ivory', 'th_camel'],
+    furakhaColorId: 'th_ivory',
+    suggestedPatternId: 'emb_09',
+    personality: 'calm',
+    matchScore: 0.86,
+    harmony: 'tonal',
+    reason: {
+      ar: 'درجات رملية متقاربة تعطي إحساساً هادئاً ومريحاً في حرّ الصيف، والتطريز يظهر بلطف دون تباين حاد.',
+      en: 'Close sand tones feel calm in summer heat, and the embroidery shows gently without harsh contrast.',
+    },
+    occasion: 'daily',
+    season: 'summer',
+    source: 'curated',
+  },
+  {
+    id: 'pal_curated_5',
+    baseColorId: 'col_navy',
+    threadColorIds: ['th_platinum', 'th_pearl_grey'],
+    furakhaColorId: 'th_platinum',
+    suggestedPatternId: 'emb_14',
+    personality: 'modern',
+    matchScore: 0.85,
+    harmony: 'neutral_accent',
+    reason: {
+      ar: 'الكحلي الداكن مع خيط بلاتيني فاتح يخلق تبايناً واضحاً وأنيقاً، مناسب للأمسيات وللأجواء الأبرد.',
+      en: 'Dark navy with a light platinum thread creates clean, elegant contrast for evenings and cooler weather.',
+    },
+    occasion: 'special',
+    season: 'winter',
+    source: 'curated',
+  },
+  {
+    id: 'pal_curated_6',
+    baseColorId: 'col_soft_white',
+    threadColorIds: ['th_pearl_grey'],
+    furakhaColorId: 'th_pearl_grey',
+    suggestedPatternId: 'emb_08',
+    personality: 'calm',
+    matchScore: 0.83,
+    harmony: 'tonal',
+    reason: {
+      ar: 'خط رفيع بلون قريب من القماش — أقل تطريز ممكن، وأنسب اختيار للاستخدام اليومي والعمل.',
+      en: 'A fine line close to the fabric colour — the least embroidery possible, ideal for daily and work wear.',
+    },
+    occasion: 'work',
+    season: 'all_year',
+    source: 'curated',
+  },
+];

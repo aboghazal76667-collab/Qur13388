@@ -1,250 +1,277 @@
-# Quran Intelligence
+# Omani Dishdasha AI
 
-تطبيق لدراسة القرآن من داخل القرآن نفسه — بحث في النص، وتحليل الجذور والسياقات،
-وتفكيك الاستدلال إلى خطوات ظاهرة.
+A mobile platform for custom **Omani dishdasha** tailoring — a design studio, a
+digital measurement profile, and a workshop operating system in one app.
+
+The product bet is not "another tailoring marketplace". It is that the most
+valuable thing a tailor owns is his memory of a customer — his measurements,
+his usual fabric, the embroidery he always asks for — and that digitising that
+relationship makes ordering another dishdasha as easy as ordering coffee.
+
+> **Codename.** `OMANI DISHDASHA AI` is a working title. Every user-visible
+> occurrence of the product name comes from `dishdasha/src/config/brand.ts`, so
+> the commercial brand is a one-file change.
 
 ---
 
-# RUN ON IPHONE
+## Run it
 
-افتح **Terminal** على جهاز الكمبيوتر ونفّذ هذه الأوامر بالترتيب.
-
-## ١. شغّل التطبيق
-
-```
+```bash
 npm install
 npx expo start
 ```
 
-انتظر حتى يظهر مربع QR في الشاشة.
+Scan the QR code with **Expo Go** on iPhone. No `.env`, no Supabase project, no
+payment merchant account and no AI key are required — see [Demo modes](#demo-modes).
 
-## ٢. على الآيفون
+```bash
+npm run typecheck   # tsc --noEmit
+npm test            # 70 unit tests, no Jest toolchain needed
+npm run verify      # both
+npm run web         # run in a browser
+npm run build:web   # static export
+```
 
-1. نزّل تطبيق **Expo Go** من App Store.
-2. تأكد أن الآيفون والكمبيوتر على **نفس شبكة الواي فاي**.
-3. افتح تطبيق **الكاميرا** في الآيفون.
-4. وجّهها إلى مربع QR الظاهر في Terminal.
-5. اضغط على الإشعار الذي يظهر في أعلى الشاشة.
+### The journey to try first
 
-سيفتح التطبيق. **هذا كل شيء — التطبيق يعمل الآن بالكامل بدون أي إعداد إضافي.**
-
-كل شيء يعمل مباشرة: البحث في المصحف، تحليل الكلمات والجذور، المقارنة بين لفظين،
-المفكرون، السجل، والمفضلة. لا يحتاج إنترنت ولا مفتاح API.
+1. **تجربة التطبيق** on the welcome screen → loads the seeded demo customer.
+2. Home shows *his* dishdasha, his live order, his saved designs.
+3. **صمّم دشداشتك** → fabric → colour → embroidery → **thread colours**.
+   Change thread 2 alone and watch only that thread recolour.
+4. Zoom the preview into **الياقة / الصدر / الكم / الفراخة**.
+5. **اقتراحات الذكاء** → pick an occasion → apply a palette.
+6. Review → save the design → **شاهدها بشكل واقعي**.
+7. Add to cart → checkout → **Demo Payment — failure**, then **— success**.
+8. Track the order; then Profile → *أدوات المطوّر* → **لوحة الخيّاط** to see the
+   same order as a production ticket, and advance its stage.
 
 ---
 
-## معاينة سريعة في المتصفح (بدون كمبيوتر)
+## Demo modes
 
-يمكن تصدير التطبيق كصفحة واحدة مستقلة تُفتح في أي متصفح، بلا خادم وبلا إنترنت:
+| Flag | Default | Effect when on |
+|---|---|---|
+| `EXPO_PUBLIC_DEMO_MODE` | `1` | Seeded catalogue, demo customer, instant login |
+| `EXPO_PUBLIC_MOCK_AI_MODE` | `1` | Local harmony stylist, simulated previews, no vendor calls |
+| `EXPO_PUBLIC_MOCK_PAYMENT_MODE` | `1` | Simulated checkout with explicit success **and failure** buttons |
+| `EXPO_PUBLIC_ROLE_SWITCHER` | `1` | Customer / tailor / admin switcher in Profile |
 
-```
-npm run build:web
-```
+Turning a flag off swaps in the production adapter for that concern only. See
+`.env.example`; **no secret ever belongs in an `EXPO_PUBLIC_` variable.**
 
-ينتج ملف `.web-build/quran-intelligence.html` يحوي كل شيء بداخله —
-حزمة التطبيق وقاعدة بيانات المصحف والخط. افتحه مباشرة أو ارفعه في أي مكان.
-
-في هذه النسخة يكون التحليل بالذكاء الاصطناعي **مطفأً افتراضيًا**، لأنه لا يوجد
-خادم يمكن الوصول إليه؛ وكل ما عدا ذلك يعمل كاملًا.
-
----
-
-## ٣. (اختياري) تشغيل التحليل بالذكاء الاصطناعي
-
-التطبيق يعمل بدونه. هذه الخطوة تضيف صياغة تفسيرية أوسع فقط.
-
-في **نافذة Terminal جديدة**:
-
-```
-cd server
-npm install
-cp .env.example .env
-```
-
-افتح ملف `server/.env` بأي محرر نصوص، وضع مفتاحك مكان `sk-ant-...`:
-
-```
-ANTHROPIC_API_KEY=sk-ant-ضع-مفتاحك-هنا
-```
-
-ثم:
-
-```
-npm run dev
-```
-
-أعد فتح التطبيق في الآيفون. سيجد الخادم تلقائيًا.
-
-> **المفتاح لا يوجد داخل التطبيق أبدًا.** يبقى في الخادم على جهازك وحده.
+**Demo credentials:** none. `تجربة التطبيق` signs in the seeded customer
+(سالم — tailor-verified measurements, three past orders, five saved designs).
+Phone and email sign-in are wired to the same demo session until OTP is enabled.
 
 ---
 
-## إذا لم يظهر التطبيق على الآيفون
+## What is real, what is mocked
 
-| المشكلة | الحل |
-|---|---|
-| لا يفتح بعد مسح الـQR | تأكد أن الجهازين على نفس شبكة الواي فاي |
-| ما زال لا يعمل | أوقف الأمر بـ `Ctrl+C` وشغّل `npx expo start --tunnel` |
-| خطأ في الحزم | نفّذ `rm -rf node_modules && npm install` |
-| شاشة بيضاء | أغلق Expo Go تمامًا وأعد فتحه |
+Honest labelling is a product requirement here, not a footnote. The customer
+demo is polished; this table is the truth behind it.
 
----
+### Working — real logic, runs offline
 
-## ماذا يفعل التطبيق
+- **Layered vector garment renderer.** Silhouette, fabric colour, weave
+  texture, sheen, collar, placket embroidery, cuffs, furakha and shading are
+  separate SVG layers. Recolouring repaints one layer on the same frame as the
+  tap.
+- **Independent embroidery thread channels.** 15 original motifs; changing
+  channel 2 repaints only channel-2 paths.
+- **Deterministic colour harmony engine.** Analogous / complementary / split /
+  monochromatic / tonal / neutral-accent, with asymmetric contrast scoring and
+  warm-cool balance. Same input → same palettes, always.
+- **Pricing.** OMR at three decimals via integer minor units. Merchant-controlled
+  tax; no rate is assumed.
+- **Design serialisation + stable hashing.** The structured config is the source
+  of truth; the hash drives preview caching and reorder matching.
+- **Measurement templates, validation, unit conversion, alteration deltas.**
+- **Order workflow.** 11 operational statuses → 5 customer-facing stages, every
+  transition timestamped.
+- **Style memory.** Derived from orders and favourites; drives "order my usual".
+- **Cart, checkout, order creation, tracking, alterations, reorder.**
+- **Tailor dashboard + digital tailoring ticket.**
+- **Demo admin.** Catalogue and price edits flow through to the studio live.
+- **Arabic-first UI with runtime-switchable RTL.**
+- **Local analytics** with a session funnel.
 
-### التبويبات
+### Mocked — clearly labelled in the UI
 
-| التبويب | الوظيفة |
-|---|---|
-| **اسأل** | اطرح سؤالًا فيُفكَّك إلى مفاهيم وجذور ومواضع، ثم تُعرض النتيجة مقسّمة |
-| **المصحف** | تصفّح السور والآيات، واضغط على أي كلمة لتحليلها في القرآن كله |
-| **قارن** | قارن لفظين (نبي/رسول، كتاب/قرآن…) من حيث التوزيع والسياق |
-| **المفكرون** | مناهج وأطروحات مفكرين معاصرين، بمصادرها ودرجة توثيقها |
-| **السجل** | الأسئلة السابقة، محفوظة على الجهاز فقط |
+- **Realistic preview.** `SimulatedPreviewProvider` returns a `simulated:` asset
+  rendered by the high-fidelity vector renderer. Every asset carries
+  `isSimulated: true` and the screen shows *"معاينة محاكاة (وضع تجريبي) — ليست
+  ناتج ذكاء اصطناعي حقيقي"*. **It is not AI output and never claims to be.**
+- **Virtual try-on.** Same simulation, behind explicit consent.
+- **Payments.** `MockPaymentProvider`. No money moves. Both outcomes reachable.
+- **Kumma / mussar colour extraction.** *Genuine* canvas quantisation on web;
+  **simulated** on native (Expo Go has no pixel access without a native module).
+  The UI states which one produced the result.
+- **AI stylist provenance.** The palettes are really computed — by a local
+  colour-theory engine, not an LLM. The screen says so.
 
-### شكل الإجابة
+### Not implemented
 
-الخلاصة · الآيات المركزية · التحليل القرآني · تحليل الكلمات · مسار الاستدلال ·
-الرأي المرجّح · أقوى اعتراض · آراء المفكرين · درجة الثقة.
-
----
-
-## المبادئ التي بُني عليها
-
-هذه ليست شعارات — كل واحد منها مفروض في الكود، والملفات المذكورة هي مكان فرضه.
-
-**١. الفصل بين خمسة أشياء لا تُخلط**
-
-نص الآية · الملاحظة اللغوية · الاستنتاج · رأي المفكر · درجة الثقة.
-كل حلقة في «مسار الاستدلال» ملوّنة بحسب نوعها، فيرى القارئ أيّها نصّ وأيّها افتراض أُضيف.
-لا يُقال «القرآن يقول إن معنى س هو ص» إذا كان (ص) تفسيرًا.
-
-**٢. النص القرآني لا يأتي من نموذج لغوي — أبدًا**
-
-النموذج يطلب رقمًا (`{surah: 2, ayah: 183}`) والتطبيق يجلب النص من قاعدة بياناته.
-مخطط الاستجابة في `server/src/schema.ts` لا يحتوي أصلًا على حقل لنص الآية،
-فاختراع آية غير ممكن بنيويًا لا ممنوع أخلاقيًا فقط.
-كل مرجع يمرّ على `src/analysis/validate.ts`: غير الموجود يُرفض ويُعلَن رفضه،
-والنص المخالف يُستبدل بالصحيح.
-
-**٣. لا يُنسب رأي لأحد بلا مصدر**
-
-كل ادعاء في `src/knowledge/thinkers.ts` يحمل مصدرًا ودرجة توثيق.
-وحيث لا تتوفر مصادر موثقة يُعرض ذلك صراحةً: «لا توجد لدينا بيانات موثقة كافية».
-قائمة فارغة هنا جواب صحيح، لا فراغ يُملأ بالتخمين.
-
-**٤. الاشتراك في الجذر يدل على الموضع، لا على المعنى**
-
-البحث بالجذر يقول أين تنظر فقط. بعده يفحص `QuranInternalAnalysisEngine` السياق:
-الفاعل، المفعول، حرف الجر، الصيغة، ما قبل وما بعد.
-وتصنيف الاستعمالات بنيوي (نحوي) لا دلالي، ومصرَّح بذلك في كل موضع يُعرض فيه.
-
-**٥. عدم الترادف فرضية تُختبر، لا قاعدة مفروضة**
-
-يعرض النظام: «إذا افترضنا عدم الترادف، فهذه الفروق المحتملة…»
-ثم الأدلة المؤيدة **والأدلة التي تُضعف التفريق** معًا.
-
-**٦. النظام مُلزَم بمحاولة هدم استنتاجه**
-
-بعد كل استنتاج يبحث `counterArgument.ts` عن المواضع التي تتركها القراءة الغالبة
-بلا تفسير، ويحسب نسبتها. قراءة تفسّر ٤٠ موضعًا من ٦٠ وتتجاهل الباقي قراءة أضعف،
-والقارئ يستحق أن يعرف أي عشرين.
-
-**٧. لا يقين زائف**
-
-درجة الثقة (مرتفعة / متوسطة / منخفضة / غير محسوم) لا تُعرض أبدًا بغير سببها.
-
-**٨. تصنيف قوة العلاقة بالنص (A→E) يقيس المسافة عن النص، لا الصواب**
-
-`A` نص مباشر، `E` يعتمد على مقدمة خارجية.
-`E` لا تعني «خطأ»، و`A` لا تعني «القراءة الوحيدة».
-
-**٩. وضع «القرآن فقط»**
-
-لا حديث، ولا صحيح البخاري أو مسلم، ولا كتب الحديث، ولا الإجماع، ولا المذاهب
-الفقهية، ولا الروايات التاريخية، ولا أقوال الصحابة — كمصادر إثبات للحكم.
-الشارة ظاهرة أعلى كل تحليل، والقاعدة مفروضة في `server/src/index.ts`
-الذي يرفض أي وضع آخر بدل أن يخفّفه بصمت.
+- Real AI image generation (adapter written, no vendor wired).
+- Thawani payments (adapter written; needs a merchant account + webhook server).
+- Live Supabase (schema, RLS and adapter written; not yet run against a project).
+- OTP sign-in, push notifications, delivery-company integration.
+- Camera body measurement — **deliberately** reported as unavailable rather than
+  faked. See `services/measurement/provider.ts`.
+- Tailor-uploaded embroidery catalogues (modelled, no upload UI).
+- Billing for any revenue model (data structures allow them; none implemented).
+- Other GCC garments — modelled throughout, intentionally not exposed.
 
 ---
 
-## البنية
+## Architecture
 
 ```
-app/                     شاشات التطبيق (Expo Router)
-  (tabs)/                اسأل · المصحف · قارن · المفكرون · السجل
-  surah/ verse/ word/    المصحف التحليلي
-  analysis/ thinker/     النتائج والمفكرون
-  search  favorites  graph  settings
-
-src/
-  types/                 QuranVerse · Argument · ThinkerClaim · AnalysisResult …
-  quran/
-    arabic.ts            التطبيع العربي ومعالجة الرسم العثماني
-    repository.ts        المصدر الوحيد لنص الآيات + فهارس الجذور
-    search.ts            بحث: حرفي · مطبّع · بالجذر · بالمفهوم
-  analysis/
-    questionAnalyzer.ts  تفكيك السؤال واستخراج افتراضاته الضمنية
-    internalAnalysis.ts  QuranInternalAnalysisEngine
-    comparison.ts        المقارنة التوزيعية بين لفظين
-    nonSynonymy.ts       اختبار فرضية عدم الترادف
-    argument.ts          بناء الحجة وكشف الافتراضات
-    counterArgument.ts   توليد الاعتراض المضاد
-    evidence.ts          تصنيف قوة العلاقة بالنص A→E
-    validate.ts          حارس منع الهلوسة
-    offlineEngine.ts     المسار الكامل على الجهاز
-    pipeline.ts          التنسيق بين المحلي والذكاء الاصطناعي
-  knowledge/             المفاهيم والمفكرون والادعاءات
-  graph/                 بناء خريطة المعرفة
-  data/generated/        المصحف ومورفولوجيته (مضمّنة)
-
-server/                  الخادم الوسيط الذي يحمي المفتاح
-scripts/
-  fetch-data.sh          تنزيل المصادر الخام
-  build-data.js          توليد قاعدة البيانات
-  smoke.ts               اختبارات المحرّكات
+dishdasha/
+  app/                        expo-router routes (thin screens only)
+    (tabs)/                   home · design · orders · saved · profile
+    stylist · preview · compare · kumma · photo-consent
+    cart · checkout · order/[id] · alteration/[orderId]
+    measurements/ · fabrics · patterns · tailors · tailor/[id]
+    dashboard/ · dashboard/order/[id]      tailor operating system
+    admin/ · legal/[doc]
+  src/
+    config/     brand · env flags · market (currency, tax, language)
+    i18n/       ar + en dictionaries, direction helpers, LTR isolation
+    theme/      design tokens
+    domain/     types · garment registry · measurement templates
+    data/       colours · fabrics · embroidery · tailors · demo · palettes · legal
+    engine/     color · colorHarmony · money · pricing · design · measurements
+                orders · styleMemory          ← pure, tested, no React
+    services/   ai/ · payment/ · analytics/ · backend/ · measurement/
+    store/      zustand + AsyncStorage persistence
+    components/ ui/ · dishdasha/ (renderer) · cards
+    hooks/      usePricing · useStyleMemory
+    features/   studio/ panels
+  tests/        dependency-free harness + 70 assertions
+supabase/migrations/  0001 schema · 0002 RLS · 0003 storage
 ```
 
-### مصادر البيانات
+**Layering rule.** `engine/` is pure TypeScript with no React and no I/O — which
+is why it is the part under test. `services/` owns every external boundary.
+`app/` screens compose; they never call a vendor or do arithmetic.
 
-| المصدر | المحتوى |
-|---|---|
-| [quran-json](https://github.com/risan/quran-json) | النص العثماني · ١١٤ سورة · ٦٢٣٦ آية |
-| [Quranic Arabic Corpus](https://github.com/mustafa0x/quran-morphology) | ١٦٥٠ جذرًا · ٤٧٦٠ لفظًا أصليًا · تحليل صرفي لكل كلمة |
+### The two visualisation layers
 
-تُدمج في `src/data/generated/` عبر `scripts/build-data.js`.
-عشر آيات لا تتطابق فيها حدود الكلمات بين المصدرين، فتُشحن **بلا** مورفولوجيا
-بدلًا من إسناد جذور خاطئة إليها.
+**Layer 1 — instant configurator.** Vector layers over a shared geometry
+(`components/dishdasha/geometry.ts`). Colour changes are a repaint: no network,
+no regeneration, no cost. Zoom targets are viewBox crops of the same geometry,
+so a detail view can never drift out of alignment with the garment.
+
+**Layer 2 — realistic preview.** `ImageGenerationService` behind a provider
+registry. Mock today, hosted model later, identical interface. Results cache by
+design hash, and a low-resolution pass exists before committing to a high one.
+
+### AI provider abstraction
+
+`services/ai/index.ts` is the only place a provider is chosen:
+
+```ts
+ColorRecommendationService   local harmony engine │ remote LLM ranking
+ImageGenerationService       simulated vector     │ hosted image model
+ColorExtractionService       canvas (web) / simulated (native)
+VirtualTryOnService          simulated, consent-gated at the service boundary
+MeasurementEstimationService reports unavailable — not faked
+```
+
+Screens never construct a provider. Remote adapters call **our** server, never a
+vendor directly, so keys stay server-side. Every call is timed and logged with
+provider, model, latency, cost estimate and a **design hash only** — never a
+photo URI, never a measurement.
+
+### Payment abstraction
+
+`PaymentProvider` encodes two rules: the client holds no merchant secret, and
+the client's word is not proof of payment. `MockPaymentProvider` is the default;
+`ThawaniPaymentProvider` posts to our server for session creation and reads back
+only what the server verified from Thawani's webhook. The RLS policies grant no
+client write on `payments` at all, so this is enforced in the database too.
+
+### GCC expansion
+
+Nothing in the schema or the domain types is named after the Omani dishdasha
+except the *rows*. `garment_types`, `garment_components`, `customization_zones`,
+`measurement_templates` and `regional style families` are all generic. Adding a
+UAE kandura is a `GarmentType` record plus motifs and a measurement template —
+no core rewrite. Only `OMANI_DISHDASHA` is `enabled`, so nothing else surfaces.
 
 ---
 
-## أوامر للمطوّر
+## Supabase
 
+```bash
+supabase db push          # or run the three files in order
 ```
-npm start            تشغيل التطبيق
-npm run typecheck    فحص الأنواع
-npm run smoke        اختبار المحرّكات على المصحف كاملًا
-npm run build:data   إعادة توليد قاعدة البيانات
-npm run build:web    تصدير صفحة واحدة مستقلة للمتصفح
-npm run server       تشغيل الخادم
-```
+
+- `0001_init.sql` — 37 tables, UUID keys, `created_at`/`updated_at`, soft delete
+  where production history depends on a row.
+- `0002_rls.sql` — RLS **enabled and forced** on every table. A customer cannot
+  read another customer's measurements, orders, addresses, designs or photos. A
+  workshop sees a measurement profile *only* while it holds an order that
+  references it. `photo_assets` has no tailor policy and no admin policy at all.
+- `0003_storage.sql` — public `catalog`/`previews`, private `customer-photos`
+  partitioned by `auth.uid()` and served by signed URL.
+
+Then `npm install @supabase/supabase-js react-native-url-polyfill` and set the
+two `EXPO_PUBLIC_SUPABASE_*` variables. The adapter loads through a runtime
+require so an unconfigured install keeps working offline.
 
 ---
 
-## التوسعة لاحقًا
+## Privacy
 
-الواجهات جاهزة للاستبدال دون تغيير الشاشات:
+Measurements and customer photos are treated as sensitive personal data in
+product design, whatever their legal classification.
 
-- **بحث دلالي حقيقي** — `SemanticIndex` في `src/quran/search.ts` (Qdrant / pgvector).
-- **قاعدة بيانات** — `repository.ts` هو نقطة الوصول الوحيدة (PostgreSQL / Supabase).
-- **رسم بياني للمعرفة** — `KnowledgeGraph` في `src/types/knowledge.ts` بنية Neo4j نفسها.
-- **مفكرون جدد** — أضف `Thinker` وادعاءاته إلى `src/knowledge/thinkers.ts`. لا ملف آخر يتغيّر.
-- **استيعاب مصادر** (يوتيوب، بودكاست، كتب) — كل ادعاء يحمل `SourceReference` أصلًا.
+- Photos are **optional**; you can design and buy without one.
+- Nothing is processed until explicit consent plus a deliberate tap.
+- Photos are session-scoped unless the customer opts into storage, and there is
+  a delete control.
+- Measurement data and try-on imagery are separate concerns and separate tables.
+- Marketing consent is separate from operational notifications and defaults off.
+- Data export and account deletion are wired in Profile → الخصوصية والبيانات.
+
+Privacy, Terms, Returns, Alterations and Custom-made policies ship as **drafts**
+marked *"تتطلب مراجعة قانونية قبل الإطلاق"* in the app itself. This software does
+not guarantee legal compliance; Oman PDPL obligations need counsel before launch.
 
 ---
 
-## حدود التطبيق
+## Known limitations
 
-أداة بحث لغوي في النص القرآني — **ليست مرجعًا للإفتاء** ولا بديلًا عن الدراسة
-المتخصصة. ما يعرضه من استنتاجات قراءات قابلة للنقض، ويُصرَّح دائمًا بدرجة بُعدها
-عن النص وبدرجة الثقة فيها.
+- Garment art is **vector placeholders**, not photographed tailoring. The layer
+  API is what real assets would slot into.
+- Fabric brand names are invented and flagged `isDemoData`. No factual claim is
+  made about any real mill. Tailors are fictional; ratings are `null`, not
+  invented.
+- Native colour extraction is simulated (labelled).
+- Everything persists to device storage in demo mode; clearing app data resets.
+- Deep links need SPA fallback when self-hosting the web export.
+- No offline queue: a failed action retries, it does not replay later.
+
+## Production checklist
+
+- [ ] Replace brand, legal entity and support contacts in `config/brand.ts`
+- [ ] Legal review of all five policy drafts (Oman PDPL included)
+- [ ] Apply migrations; verify RLS with a second test account before launch
+- [ ] Stand up the server: AI proxy, Thawani session creation, **webhook verification**
+- [ ] Turn off `MOCK_PAYMENT_MODE`; confirm no order is ever marked paid client-side
+- [ ] Replace demo fabrics/tailors with real merchant inventory
+- [ ] Photograph real fabric swatches and vectorise real embroidery patterns
+- [ ] Configure tax per merchant (no rate is assumed anywhere)
+- [ ] Set photo retention and expiry jobs for `photo_assets`
+- [ ] Move any native-only feature to an EAS development build
+- [ ] Load-test preview caching before enabling paid generation
+
+---
+
+See [`PRODUCT_DECISIONS.md`](./PRODUCT_DECISIONS.md) for the reasoning behind the
+choices above, and [`ROADMAP.md`](./ROADMAP.md) for what comes next.
+
+> This repository also contains an unrelated earlier project (`app/`, `src/`,
+> `server/`) preserved on the `claude/quran-intelligence-mvp-in0txn` branch.
+> It is inactive: Expo Router is pointed at `dishdasha/app` in `app.json`.

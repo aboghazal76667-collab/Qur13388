@@ -1,6 +1,6 @@
 {
-  "name": "quran-intelligence",
-  "version": "1.0.0",
+  "name": "omani-dishdasha-ai",
+  "version": "0.1.0",
   "main": "app-entry",
   "private": true,
   "scripts": {
@@ -10,11 +10,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build:data": "node scripts/build-data.js",
-    "server": "npm --prefix server run dev",
-    "server:install": "npm --prefix server install",
-    "smoke": "tsx scripts/smoke.ts",
-    "build:web": "EXPO_PUBLIC_STANDALONE=1 expo export --platform web --output-dir .web-build --clear && node scripts/build-web-artifact.js .web-build .web-build/quran-intelligence.html"
+    "test": "tsx dishdasha/tests/run.ts",
+    "verify": "npm run typecheck && npm run test",
+    "build:web": "EXPO_PUBLIC_STANDALONE=1 expo export --platform web --output-dir .web-build --clear && node scripts/build-web-artifact.js .web-build .web-build/omani-dishdasha-ai.html"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.11",
@@ -23,6 +21,7 @@
     "expo": "~57.0.14",
     "expo-constants": "~57.0.12",
     "expo-haptics": "~57.0.1",
+    "expo-image-picker": "~17.0.8",
     "expo-linking": "~57.0.6",
     "expo-router": "~57.0.14",
     "expo-splash-screen": "~57.0.7",

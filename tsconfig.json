@@ -4,17 +4,9 @@
     "strict": true,
     "resolveJsonModule": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@dd/*": ["./dishdasha/src/*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules",
-    "server"
-  ]
+  "include": ["dishdasha/**/*.ts", "dishdasha/**/*.tsx", "app-entry.web.js"],
+  "exclude": ["node_modules", ".web-build"]
 }
