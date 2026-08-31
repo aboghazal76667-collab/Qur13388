@@ -75,19 +75,20 @@ for (const url of assetUrls) {
 // carries its own design system (src/theme/tokens.ts) and repaints every
 // surface once React mounts.
 //
-// Theme note: the app resolves light/dark through React Native's
-// `useColorScheme`, which on web reads `prefers-color-scheme` and nothing else.
-// So this background keys off the same signal rather than the host's
-// `data-theme` stamp — keying it off the stamp would let the pre-hydration
-// ground disagree with the app that paints over it. Both values come from the
-// palettes in src/theme/tokens.ts.
-const LIGHT_GROUND = '#F7F5F0';
-const DARK_GROUND = '#0F1512';
+// Theme note: this app commits to a single light palette (app.json sets
+// `userInterfaceStyle: "light"`, and src/theme/tokens.ts defines no dark
+// variant), so the pre-hydration ground is pinned rather than keyed off
+// `prefers-color-scheme`. Reacting to the system theme here would paint a dark
+// ground that the app then repaints sand a frame later.
+const GROUND = '#F6F1E9'; // theme.color.bg — src/theme/tokens.ts
 
-const page = `<title>Quran Intelligence</title>
+const appName = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'),
+).expo.name;
+
+const page = `<title>${appName}</title>
 <style>
-  :root { color-scheme: light dark; --ground: ${LIGHT_GROUND}; }
-  @media (prefers-color-scheme: dark) { :root { --ground: ${DARK_GROUND}; } }
+  :root { color-scheme: light; --ground: ${GROUND}; }
 
   html, body { height: 100%; margin: 0; }
   body { overflow: hidden; background: var(--ground); }
