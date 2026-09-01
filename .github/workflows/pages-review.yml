@@ -1,0 +1,96 @@
+# Public review build for the external product/UX audit.
+#
+# Deploys the existing Expo web export to GitHub Pages so a reviewer can open
+# the app in a normal browser with no Claude account, no login, no Expo Go and
+# no local tooling.
+#
+# This workflow is deployment infrastructure only. It builds the app exactly as
+# committed — no source, screen or design changes — using the standalone
+# single-file export (scripts/build-web-artifact.js), which inlines the bundle
+# and every asset it reaches for. That means the page makes zero external
+# requests and does not care which sub-path Pages serves it from.
+#
+# Only public demo configuration is passed in. No secret of any kind is
+# referenced here: with MOCK flags on, the app uses its local seed data,
+# local stylist and simulated payment provider, so there is nothing to leak.
+name: Public review build
+
+on:
+  push:
+    branches: [claude/omani-dishdasha-ai-mvp-9ixppw]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One review deployment at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages-review
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Guard the review build: if the app does not typecheck or its engine
+      # tests fail, publishing it for an audit would waste the reviewer's time.
+      - run: npm run verify
+
+      - name: Build the standalone web export
+        env:
+          # Demo modes explicitly on. These are the defaults in src/config/env.ts;
+          # setting them here makes the reviewer's build unambiguous.
+          EXPO_PUBLIC_DEMO_MODE: '1'
+          EXPO_PUBLIC_MOCK_AI_MODE: '1'
+          EXPO_PUBLIC_MOCK_PAYMENT_MODE: '1'
+          EXPO_PUBLIC_ROLE_SWITCHER: '1'
+        run: npm run build:web
+
+      - name: Assemble the site
+        run: |
+          mkdir -p site
+          cp .web-build/omani-dishdasha-ai.html site/index.html
+          # Pages has no SPA rewrite, so a refresh on an in-app route would 404.
+          # The standalone build pins the router to the root on boot, so serving
+          # the same page for any unknown path recovers cleanly at Home.
+          cp site/index.html site/404.html
+          # Skip Jekyll: it would ignore files and folders beginning with "_".
+          touch site/.nojekyll
+          cp assets/favicon.png site/favicon.png
+          ls -la site
+
+      - name: Fail if any secret-shaped value reached the bundle
+        run: |
+          # The build inlines every EXPO_PUBLIC_* variable, so this is the last
+          # place to catch a credential that should never ship to a browser.
+          if grep -qE 'service_role|SUPABASE_SERVICE|sk_live|sk_test|THAWANI_SECRET|_SECRET_KEY|BEGIN [A-Z ]*PRIVATE KEY' site/index.html; then
+            echo "A secret-shaped string is present in the review bundle."
+            exit 1
+          fi
+          echo "No secret-shaped strings found."
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turns Pages on for this repository if it is not already enabled.
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
