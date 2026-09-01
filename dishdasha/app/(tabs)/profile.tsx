@@ -239,6 +239,12 @@ export default function Profile() {
           <View style={{ gap: theme.space.sm, marginTop: theme.space.sm }}>
             <Button label={t('dash.title')} variant="secondary" onPress={() => router.push('/dashboard')} full />
             <Button label={t('admin.title')} variant="secondary" onPress={() => router.push('/admin')} full />
+            <Button
+              label="DEV · Visual inspector"
+              variant="secondary"
+              onPress={() => router.push('/dev/visual-inspector')}
+              full
+            />
           </View>
           <Notice
             tone="info"

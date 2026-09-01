@@ -11,7 +11,7 @@
  * Vendor-neutral by construction: the app depends on the interface, and the
  * server holds whichever provider's key.
  */
-import type { DesignConfig, MeasurementProfile, PreviewAsset } from '@dd/domain/types';
+import type { DesignConfig, FabricTexture, MeasurementProfile, PreviewAsset } from '@dd/domain/types';
 import { getColor, getThreadColor } from '@dd/data/colors';
 import { getFabric } from '@dd/data/fabrics';
 import { getPattern } from '@dd/data/embroidery';
@@ -45,6 +45,9 @@ export type GarmentSpec = {
     id: string;
     name: string;
     composition: string | null;
+    /** Catalogue texture id (e.g. 'sateen', 'linen_slub') — drives the material. */
+    texture: FabricTexture;
+    /** Weave family, for a generator's prose understanding. */
     weave: string;
     sheen: number;
     roughness: number;
@@ -101,6 +104,7 @@ export const buildGarmentSpec = (
       id: fabric?.id ?? 'unknown',
       name: fabric?.name.en ?? 'unknown',
       composition: fabric?.composition ?? null,
+      texture: fabric?.texture ?? 'plain_weave',
       weave: material.weave,
       sheen: material.sheen,
       roughness: material.roughness,
@@ -148,9 +152,58 @@ export const buildGarmentSpec = (
   };
 };
 
+/**
+ * A canonical render of the configured garment, produced by the app's own
+ * renderer and handed to the generator as a visual anchor.
+ *
+ * This is the V3 addition that most reduces design drift: a spec tells a model
+ * what the garment IS, but an image of the actual configured garment tells it
+ * what the garment LOOKS like — silhouette, embroidery placement, furakha
+ * position — leaving far less room to invent a different robe.
+ */
+export type CanonicalRender = {
+  view: string;
+  /** Data URI or storage reference of the render. */
+  imageRef: string;
+  /** Which renderer produced it, so the server knows how much to trust it. */
+  source: 'real3d' | 'v2fallback';
+};
+
+/** Hard constraints a generator must not violate, restated for the provider. */
+export type ReferenceConstraints = {
+  collarless: true;
+  ankleLength: true;
+  looseFit: true;
+  hasShaq: true;
+  hasFurakha: boolean;
+  /** Millimetre band width — the scale that must survive generation. */
+  embroideryBandWidthMm: number | null;
+  forbid: string[];
+};
+
+export const buildReferenceConstraints = (spec: GarmentSpec): ReferenceConstraints => ({
+  collarless: true,
+  ankleLength: true,
+  looseFit: true,
+  hasShaq: true,
+  hasFurakha: Boolean(spec.furakha),
+  embroideryBandWidthMm: spec.embroidery?.bandWidthMm ?? null,
+  forbid: [
+    'stand collar',
+    'shirt collar',
+    'button placket down the chest',
+    'cuff links',
+    'oversized decorative motif',
+    'fitted or tailored waist',
+  ],
+});
+
 export type PhotorealisticRequest = {
   spec: GarmentSpec;
   quality: 'low' | 'high';
+  /** Renders of the configured garment, anchoring the generation. */
+  canonicalRenders?: CanonicalRender[];
+  constraints?: ReferenceConstraints;
   /** Only ever set for try-on, and only after verified consent. */
   customerPhotoUri?: string | null;
 };
@@ -232,8 +285,14 @@ export class RemotePhotorealisticProvider implements PhotorealisticDishdashaProv
         const response = await fetch(`${this.baseUrl}/ai/product-preview`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // The whole spec, never a prose prompt.
-          body: JSON.stringify({ spec: req.spec, quality: req.quality }),
+          // The whole spec, canonical renders of the actual configuration, and
+          // the hard constraints — never a prose prompt.
+          body: JSON.stringify({
+            spec: req.spec,
+            quality: req.quality,
+            canonicalRenders: req.canonicalRenders ?? [],
+            constraints: req.constraints ?? buildReferenceConstraints(req.spec),
+          }),
         });
         if (!response.ok) throw new Error(`preview failed (${response.status})`);
         const data = (await response.json()) as { url: string };
