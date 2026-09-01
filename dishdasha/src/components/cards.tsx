@@ -207,16 +207,29 @@ export const PatternPreview: React.FC<{
   threadColorIds: string[];
   width?: number;
   height?: number;
-}> = ({ pattern, threadColorIds, width = 44, height = 76 }) => (
-  <PatternBandPreview
-    motif={pattern.motif}
-    c1={threadHex(threadColorIds[0] ?? 'th_navy')}
-    c2={threadHex(threadColorIds[1] ?? threadColorIds[0] ?? 'th_silver')}
-    c3={threadHex(threadColorIds[2] ?? threadColorIds[0] ?? 'th_white')}
-    width={width}
-    height={height}
-  />
-);
+}> = ({ pattern, threadColorIds, width = 44, height = 76 }) => {
+  const ids = [
+    threadColorIds[0] ?? 'th_navy',
+    threadColorIds[1] ?? threadColorIds[0] ?? 'th_silver',
+    threadColorIds[2] ?? threadColorIds[0] ?? 'th_white',
+  ];
+  return (
+    <PatternBandPreview
+      motif={pattern.motif}
+      patternId={pattern.id}
+      c1={threadHex(ids[0])}
+      c2={threadHex(ids[1])}
+      c3={threadHex(ids[2])}
+      metallic={[
+        getThreadColor(ids[0])?.metallic ?? false,
+        getThreadColor(ids[1])?.metallic ?? false,
+        getThreadColor(ids[2])?.metallic ?? false,
+      ]}
+      width={width}
+      height={height}
+    />
+  );
+};
 
 export const TailorCard: React.FC<{
   tailor: TailorBusiness;

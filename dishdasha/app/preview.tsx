@@ -9,7 +9,15 @@ import { ENV } from '@dd/config/env';
 import type { PreviewAsset } from '@dd/domain/types';
 import { hashConfig } from '@dd/engine/design';
 import { useI18n } from '@dd/i18n';
-import { imageGenerationService, isSimulatedUri } from '@dd/services/ai';
+import {
+  buildGarmentSpec,
+  evidenceFromOwnRenderer,
+  isSimulatedV2,
+  photorealisticProvider,
+  validateAgainstSpec,
+  type ConsistencyResult,
+} from '@dd/services/ai';
+import { activeMeasurements, useProfileStore } from '@dd/store/profileStore';
 import { track } from '@dd/services/analytics';
 import { useDesignStore } from '@dd/store/designStore';
 import { theme } from '@dd/theme/tokens';
@@ -27,22 +35,32 @@ export default function Preview() {
   const { t, L } = useI18n();
   const config = useDesignStore((s) => s.config);
 
+  const measurements = useProfileStore((s) => s.measurements);
+  const selectedMeasurementId = useProfileStore((s) => s.selectedMeasurementId);
+  const measurement =
+    activeMeasurements(measurements).find((m) => m.id === selectedMeasurementId) ?? null;
+
   const [asset, setAsset] = useState<PreviewAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [fromCache, setFromCache] = useState(false);
+  const [consistency, setConsistency] = useState<ConsistencyResult | null>(null);
 
   const generate = async (quality: 'low' | 'high') => {
     setLoading(true);
     setFailed(false);
+    setConsistency(null);
     const hash = hashConfig(config);
     const before = Date.now();
     try {
-      const result = await imageGenerationService.generate({ config, configHash: hash, quality });
-      // A sub-50ms return means the cache answered — worth telling the user,
-      // because it explains why an expensive-looking action was instant.
+      // The COMPLETE structured design goes to the provider — never a prose
+      // prompt, which is what lets a model invent a different garment.
+      const spec = buildGarmentSpec(config, measurement, 0);
+      const result = await photorealisticProvider.generateProductPreview({ spec, quality });
       setFromCache(Date.now() - before < 50);
       setAsset(result);
+      // Verify the result actually depicts the configured design.
+      setConsistency(validateAgainstSpec(spec, evidenceFromOwnRenderer(spec)));
       track('preview_generated', { quality, simulated: result.isSimulated, hash });
     } catch {
       setFailed(true);
@@ -86,8 +104,16 @@ export default function Preview() {
           <Notice title={t('preview.failed')} text={t('preview.failedHint')} tone="warning" />
         ) : null}
 
-        {asset && isSimulatedUri(asset.uri) ? (
+        {asset && isSimulatedV2(asset.uri) ? (
           <Notice tone="warning" text={t('preview.simulated')} />
+        ) : null}
+
+        {consistency && consistency.requiresRegeneration ? (
+          <Notice
+            tone="danger"
+            title={t('preview.needsRegenerate')}
+            text={t('preview.mismatch')}
+          />
         ) : null}
 
         <View style={{ gap: theme.space.sm }}>

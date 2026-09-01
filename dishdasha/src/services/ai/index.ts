@@ -3,6 +3,16 @@ import { LocalColorExtractionService } from './colorExtraction';
 import { LocalHarmonyStylist } from './mockColorRecommendation';
 import { SimulatedPreviewProvider, SimulatedTryOnProvider } from './mockImageGeneration';
 import { RemoteImageGenerationService, RemoteStylist } from './remote';
+import {
+  MockPhotorealisticProvider,
+  RemotePhotorealisticProvider,
+  type PhotorealisticDishdashaProvider,
+} from './photorealistic';
+import {
+  MockVirtualTryOnProvider,
+  RemoteVirtualTryOnProvider,
+  type VirtualTryOnProvider,
+} from './virtualTryOn';
 import type {
   ColorExtractionService,
   ColorRecommendationService,
@@ -37,6 +47,26 @@ export const virtualTryOnService: VirtualTryOnService = new SimulatedTryOnProvid
 
 export const colorExtractionService: ColorExtractionService =
   new LocalColorExtractionService();
+
+// ── V2 services ─────────────────────────────────────────────────────────────
+export const photorealisticProvider: PhotorealisticDishdashaProvider =
+  ENV.MOCK_AI_MODE || !ENV.API_BASE_URL
+    ? new MockPhotorealisticProvider()
+    : new RemotePhotorealisticProvider(ENV.API_BASE_URL);
+
+export const virtualTryOnProviderV2: VirtualTryOnProvider =
+  ENV.MOCK_AI_MODE || !ENV.API_BASE_URL
+    ? new MockVirtualTryOnProvider()
+    : new RemoteVirtualTryOnProvider(ENV.API_BASE_URL);
+
+export { stylistV2 } from './stylistV2';
+export type { CompleteDesign, MatchLabel } from './stylistV2';
+export { buildGarmentSpec, isSimulatedV2, clearPhotorealisticCache } from './photorealistic';
+export type { GarmentSpec } from './photorealistic';
+export { validateAgainstSpec, evidenceFromOwnRenderer } from './consistencyValidator';
+export type { ConsistencyResult } from './consistencyValidator';
+export { assessPhoto, isSimulatedTryOn } from './virtualTryOn';
+export type { PhotoQuality, TryOnResult } from './virtualTryOn';
 
 export * from './types';
 export { aiTelemetry } from './telemetry';

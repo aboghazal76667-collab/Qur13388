@@ -6,10 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { fullBrandName } from '@dd/config/brand';
 import { ENV } from '@dd/config/env';
 import { DishdashaFigure } from '@dd/components/dishdasha/DishdashaFigure';
-import { DesignCard, FabricCard, OrderCard, PaletteCard, PatternCard, configSummary } from '@dd/components/cards';
+import { DesignCard, FabricCard, OrderCard, PatternCard, configSummary } from '@dd/components/cards';
 import { Badge, Button, Card, Row, Section, T } from '@dd/components/ui';
-import { CURATED_PALETTES } from '@dd/data/palettes';
-import { applyPattern, normalizeConfig } from '@dd/engine/design';
 import { formatMoney } from '@dd/engine/money';
 import { activeOrders } from '@dd/engine/orders';
 import { useI18n } from '@dd/i18n';
@@ -109,11 +107,18 @@ export default function Home() {
             <DishdashaFigure config={heroConfig} width={196} height={307} realistic />
           </View>
           <View style={{ padding: theme.space.lg, gap: theme.space.md }}>
-            <T variant="title">{t('home.heroCta')}</T>
             <T variant="small" color={theme.color.textMuted}>
               {t('home.heroSub')}
             </T>
+            {/* One primary action on the screen. */}
             <Button label={t('home.heroCta')} onPress={openStudio} full size="lg" />
+            <Button
+              label={t('home.stylistCta')}
+              variant="ghost"
+              size="sm"
+              onPress={() => router.push('/stylist')}
+              full
+            />
           </View>
         </Card>
 
@@ -157,30 +162,6 @@ export default function Home() {
             </Card>
           </Section>
         ) : null}
-
-        {/* ── AI stylist ── */}
-        <Section title={t('home.aiPicks')} subtitle={t('home.stylistSub')} action={{ label: t('home.stylistCta'), onPress: () => router.push('/stylist') }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.md }}>
-            {CURATED_PALETTES.slice(0, 4).map((palette) => (
-              <PaletteCard
-                key={palette.id}
-                palette={palette}
-                compact
-                previewConfig={normalizeConfig({
-                  ...applyPattern(heroConfig, palette.suggestedPatternId),
-                  baseColorId: palette.baseColorId,
-                  threadColorIds: palette.threadColorIds,
-                  furakhaColorId: palette.furakhaColorId,
-                })}
-                onApply={() => {
-                  useDesignStore.getState().applyPalette(palette);
-                  track('ai_palette_applied', { paletteId: palette.id, source: 'home_curated' });
-                  router.push('/(tabs)/design');
-                }}
-              />
-            ))}
-          </ScrollView>
-        </Section>
 
         {/* ── saved designs ── */}
         {designs.length > 0 ? (

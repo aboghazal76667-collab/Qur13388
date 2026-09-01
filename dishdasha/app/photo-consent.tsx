@@ -5,9 +5,14 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { Badge, Button, Card, Loading, Notice, Row, T } from '@dd/components/ui';
 import type { PreviewAsset } from '@dd/domain/types';
-import { hashConfig } from '@dd/engine/design';
 import { useI18n } from '@dd/i18n';
-import { virtualTryOnService } from '@dd/services/ai';
+import {
+  assessPhoto,
+  buildGarmentSpec,
+  virtualTryOnProviderV2,
+  type PhotoQuality,
+} from '@dd/services/ai';
+import { activeMeasurements } from '@dd/store/profileStore';
 import { useDesignStore } from '@dd/store/designStore';
 import { useProfileStore } from '@dd/store/profileStore';
 import { theme } from '@dd/theme/tokens';
@@ -33,6 +38,11 @@ export default function PhotoConsent() {
   const [result, setResult] = useState<PreviewAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quality, setQuality] = useState<PhotoQuality | null>(null);
+  const measurements = useProfileStore((s) => s.measurements);
+  const selectedMeasurementId = useProfileStore((s) => s.selectedMeasurementId);
+  const measurement =
+    activeMeasurements(measurements).find((m) => m.id === selectedMeasurementId) ?? null;
 
   const pick = async (source: 'camera' | 'library') => {
     setError(null);
@@ -49,7 +59,12 @@ export default function PhotoConsent() {
         source === 'camera'
           ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
           : await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
-      if (!picked.canceled && picked.assets[0]) setPhotoUri(picked.assets[0].uri);
+      if (!picked.canceled && picked.assets[0]) {
+        const a = picked.assets[0];
+        setPhotoUri(a.uri);
+        // Framing check only — no biometric or body-shape inference.
+        setQuality(assessPhoto(a.width ?? 0, a.height ?? 0));
+      }
     } catch {
       setError(L({ ar: 'تعذّر فتح الكاميرا أو المعرض.', en: 'Could not open the camera or gallery.' }));
     }
@@ -60,11 +75,13 @@ export default function PhotoConsent() {
     setLoading(true);
     setError(null);
     try {
-      const asset = await virtualTryOnService.render({
-        config,
-        configHash: hashConfig(config),
+      const { asset } = await virtualTryOnProviderV2.render({
+        // The exact configured design travels with the photo, so the model has
+        // no room to invent a different dishdasha.
+        spec: buildGarmentSpec(config, measurement, 0),
         customerPhotoUri: photoUri,
         consentAt: nowIso(),
+        photoQuality: quality ?? undefined,
       });
       setResult(asset);
     } catch {
@@ -87,6 +104,19 @@ export default function PhotoConsent() {
         contentContainerStyle={{ padding: theme.space.lg, gap: theme.space.lg, paddingBottom: theme.space.xxxl }}
       >
         <Notice text={t('preview.tryOnOptional')} tone="info" />
+
+        <Card>
+          <View style={{ gap: theme.space.sm }}>
+            <T variant="small" weight="700">
+              {t('tryon.guidance')}
+            </T>
+            {(['tryon.fullBody', 'tryon.standing', 'tryon.lighting', 'tryon.frontFacing'] as const).map((k) => (
+              <T key={k} variant="tiny" color={theme.color.textMuted}>
+                · {t(k)}
+              </T>
+            ))}
+          </View>
+        </Card>
 
         <Card>
           <View style={{ gap: theme.space.md }}>
@@ -136,7 +166,16 @@ export default function PhotoConsent() {
                 <Badge label={privacy.storeTryOnPhotos ? L({ ar: 'ستُحفظ', en: 'Will be stored' }) : L({ ar: 'مؤقتة', en: 'Session only' })} tone={privacy.storeTryOnPhotos ? 'warning' : 'success'} />
               </Row>
               <Image source={{ uri: photoUri }} style={{ width: '100%', height: 260, borderRadius: theme.radius.md }} resizeMode="cover" />
-              <Button label={t('preview.generate')} onPress={render} loading={loading} full />
+              {quality && !quality.acceptable ? (
+                <Notice tone="warning" text={t('tryon.qualityPoor')} />
+              ) : null}
+              <Button
+                label={t('preview.generate')}
+                onPress={render}
+                loading={loading}
+                disabled={Boolean(quality && !quality.acceptable)}
+                full
+              />
               <Button label={t('kumma.remove')} onPress={deletePhoto} variant="danger" full />
               <Pressable onPress={() => setPrivacy({ storeTryOnPhotos: !privacy.storeTryOnPhotos })} accessibilityRole="switch">
                 <T variant="tiny" color={theme.color.accent}>
@@ -151,7 +190,16 @@ export default function PhotoConsent() {
 
         {loading ? <Loading label={t('preview.generating')} /> : null}
         {error ? <Notice text={error} tone="warning" /> : null}
-        {result ? <Notice text={t('preview.simulated')} tone="warning" title={t('preview.title')} /> : null}
+        {result ? (
+          <Card>
+            <View style={{ gap: theme.space.md }}>
+              <T variant="small" weight="700">
+                {t('tryon.beforeAfter')}
+              </T>
+              <Notice text={t('preview.simulated')} tone="warning" />
+            </View>
+          </Card>
+        ) : null}
       </ScrollView>
     </>
   );

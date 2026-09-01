@@ -1,13 +1,21 @@
 import React from 'react';
-import Svg from 'react-native-svg';
+import Svg, { Rect } from 'react-native-svg';
 
 import type { MotifKey } from '@dd/domain/types';
-import { MotifBand } from './MotifBand';
+import { getPattern } from '@dd/data/embroidery';
+import { patternPhysical } from '@dd/visual/patternPhysical';
+import { defaultPhysical } from '@dd/visual/embroideryScale';
+import { threadMaterial } from '@dd/visual/materials';
+import { getThreadColor } from '@dd/data/colors';
+import { EmbroideryBand } from './v2/EmbroideryBand';
 
 /**
- * Standalone motif swatch — the pattern shown at real density in catalogues
- * and channel pickers, so a customer picks by looking at the stitching rather
- * than at a name.
+ * Catalogue swatch for a pattern.
+ *
+ * Drawn by the SAME band renderer the garment uses, at the same millimetre
+ * scale, so what a customer picks in the catalogue is what lands on the shaq.
+ * V1 drew catalogue previews with a separate oversized tile, which is part of
+ * why the on-garment result was a surprise.
  */
 export const PatternBandPreview: React.FC<{
   motif: MotifKey;
@@ -17,18 +25,47 @@ export const PatternBandPreview: React.FC<{
   width?: number;
   height?: number;
   orientation?: 'vertical' | 'horizontal';
-}> = ({ motif, c1, c2, c3, width = 44, height = 76, orientation = 'vertical' }) => (
-  <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-    <MotifBand
-      motif={motif}
-      x={0}
-      y={0}
-      width={width}
-      height={height}
-      orientation={orientation}
-      c1={c1}
-      c2={c2}
-      c3={c3}
-    />
-  </Svg>
-);
+  /** Pattern id, so the swatch uses the pattern's real physical profile. */
+  patternId?: string;
+  metallic?: [boolean, boolean, boolean];
+}> = ({
+  motif,
+  c1,
+  c2,
+  c3,
+  width = 44,
+  height = 76,
+  orientation = 'vertical',
+  patternId,
+  metallic = [false, false, false],
+}) => {
+  const pattern = patternId ? getPattern(patternId) : undefined;
+  const physical = pattern ? patternPhysical(pattern) : defaultPhysical(2, 3);
+
+  // The swatch is a window onto a real shaq band: show it at life size in
+  // millimetres so the density the customer sees is the density they get.
+  const viewW = orientation === 'vertical' ? physical.width * 1.9 : physical.repeat * 3.2;
+  const viewH = orientation === 'vertical' ? physical.repeat * 3.6 : physical.width * 1.9;
+
+  const threads: [ReturnType<typeof threadMaterial>, ReturnType<typeof threadMaterial>, ReturnType<typeof threadMaterial>] = [
+    threadMaterial(c1, metallic[0]),
+    threadMaterial(c2, metallic[1]),
+    threadMaterial(c3, metallic[2]),
+  ];
+
+  return (
+    <Svg width={width} height={height} viewBox={`0 0 ${viewW} ${viewH}`}>
+      <Rect x={0} y={0} width={viewW} height={viewH} fill="transparent" />
+      <EmbroideryBand
+        motif={motif}
+        zone="SHAQ"
+        physical={physical}
+        x={orientation === 'vertical' ? (viewW - physical.width) / 2 : 0}
+        y={orientation === 'vertical' ? 0 : (viewH - physical.width) / 2}
+        length={orientation === 'vertical' ? viewH : viewW}
+        orientation={orientation}
+        threads={threads}
+      />
+    </Svg>
+  );
+};

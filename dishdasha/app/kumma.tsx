@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { Badge, Button, Card, Loading, Notice, Row, Section, T } from '@dd/components/ui';
-import { PaletteStrip } from '@dd/components/ui/Swatch';
+import { Swatch } from '@dd/components/ui/Swatch';
 import type { ExtractedPalette } from '@dd/services/ai/types';
 import { useI18n } from '@dd/i18n';
 import { colorExtractionService } from '@dd/services/ai';
@@ -27,6 +27,9 @@ export default function KummaMatch() {
   const [palette, setPalette] = useState<ExtractedPalette | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Extraction is imperfect — a background colour often creeps in. The
+  // customer can drop any colour before it reaches the stylist.
+  const [excluded, setExcluded] = useState<string[]>([]);
 
   const pick = async (source: 'camera' | 'library') => {
     setError(null);
@@ -126,7 +129,23 @@ export default function KummaMatch() {
           <Section title={t('kumma.extracted')}>
             <Card>
               <View style={{ gap: theme.space.md }}>
-                <PaletteStrip hexes={palette.hexes} size={30} />
+                <Row wrap gap={theme.space.md}>
+                  {palette.hexes.map((hex) => {
+                    const off = excluded.includes(hex);
+                    return (
+                      <Swatch
+                        key={hex}
+                        hex={hex}
+                        size={46}
+                        selected={!off}
+                        label={off ? t('kumma.exclude') : t('kumma.included')}
+                        onPress={() =>
+                          setExcluded(off ? excluded.filter((h) => h !== hex) : [...excluded, hex])
+                        }
+                      />
+                    );
+                  })}
+                </Row>
                 {palette.isSimulated ? (
                   <Notice
                     tone="warning"
@@ -142,11 +161,15 @@ export default function KummaMatch() {
                   />
                 )}
                 <Button
+                  disabled={palette.hexes.every((h) => excluded.includes(h))}
                   label={t('kumma.suggest')}
                   onPress={() =>
                     router.push({
                       pathname: '/stylist',
-                      params: { inspiration: palette.hexes.join(','), auto: '1' },
+                      params: {
+                        inspiration: palette.hexes.filter((h) => !excluded.includes(h)).join(','),
+                        auto: '1',
+                      },
                     })
                   }
                   full

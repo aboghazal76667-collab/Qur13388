@@ -130,10 +130,22 @@ export const Card: React.FC<{
   );
 };
 
+/**
+ * BUTTON SYSTEM.
+ *
+ * Five variants, three heights, one radius, one type scale — declared here and
+ * nowhere else. V1 let screens pick arbitrary sizes, which is why the studio
+ * ended up with four differently-weighted actions competing on one bar.
+ *
+ * Hierarchy rule: at most ONE primary per screen region. Everything else is
+ * secondary, ghost or icon.
+ */
+export const BUTTON_HEIGHT = { sm: 36, md: 46, lg: 54 } as const;
+
 export const Button: React.FC<{
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'icon';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   loading?: boolean;
@@ -157,9 +169,10 @@ export const Button: React.FC<{
     secondary: { bg: theme.color.surface, fg: theme.color.text, border: theme.color.borderStrong },
     ghost: { bg: 'transparent', fg: theme.color.accent, border: 'transparent' },
     danger: { bg: theme.color.dangerBg, fg: theme.color.danger, border: theme.color.danger },
+    icon: { bg: theme.color.surface, fg: theme.color.text, border: theme.color.border },
   } as const;
   const p = palettes[variant];
-  const heights = { sm: 38, md: 48, lg: 56 };
+  const heights = BUTTON_HEIGHT;
   const isDisabled = disabled || loading;
 
   return (

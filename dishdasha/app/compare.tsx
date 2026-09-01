@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
 import { DishdashaFigure } from '@dd/components/dishdasha/DishdashaFigure';
+import { Dishdasha360Viewer } from '@dd/components/dishdasha/v2/Dishdasha360Viewer';
 import { configSummary, paletteHexes } from '@dd/components/cards';
 import { Badge, Button, Card, EmptyState, Notice, Row, T } from '@dd/components/ui';
 import { PaletteStrip } from '@dd/components/ui/Swatch';
@@ -31,6 +32,9 @@ export default function Compare() {
   const router = useRouter();
   const { t, L, lang } = useI18n();
 
+  // ONE camera angle shared by every card: comparing colour or embroidery is
+  // meaningless if the garments are turned differently or lit differently.
+  const [sharedAngle, setSharedAngle] = React.useState(0);
   const slots = useDesignStore((s) => s.compareSlots);
   const removeFromCompare = useDesignStore((s) => s.removeFromCompare);
   const setConfig = useDesignStore((s) => s.setConfig);
@@ -83,11 +87,29 @@ export default function Compare() {
         {slots.length > 0 ? (
           <>
             <Button label={t('compare.add')} onPress={() => addToCompare()} variant="secondary" full />
+            {/* Turning this viewer turns every card with it. */}
+            <Card padded={false}>
+              <View style={{ alignItems: 'center', paddingVertical: theme.space.md }}>
+                <Dishdasha360Viewer
+                  config={slots[0]}
+                  width={190}
+                  height={250}
+                  onAngleChange={setSharedAngle}
+                  showSnapControls
+                />
+              </View>
+            </Card>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.md }}>
               {scored.map((entry, index) => (
                 <Card key={index} padded={false} style={{ width: 230 }}>
                   <View style={{ backgroundColor: theme.color.bgSunken, alignItems: 'center', paddingVertical: theme.space.md }}>
-                    <DishdashaFigure config={entry.config} width={124} height={194} transparentBackground />
+                    <DishdashaFigure
+                      config={entry.config}
+                      width={124}
+                      height={194}
+                      angle={sharedAngle}
+                      transparentBackground
+                    />
                   </View>
                   <View style={{ padding: theme.space.md, gap: 8 }}>
                     <Row justify="space-between">
