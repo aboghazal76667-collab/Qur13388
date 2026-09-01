@@ -37,9 +37,19 @@ implementation is unchanged; nothing was rewritten to suit the web.
 The reviewer's progress lives in their own browser. To start clean:
 حسابي ← الخصوصية والبيانات ← حذف الحساب, or open the link in a private window.
 
+## V2 (visual realism sprint)
+
+The build now runs DishdashaVisualEngineV2: a parametric millimetre-space
+garment with continuous 360° rotation, physically-scaled embroidery, and
+fabric rendered as a material rather than a hex fill. See
+`docs/V2_BEFORE_AFTER.md` and `docs/VISUAL_ENGINE_V2.md`.
+
+Rotation is **parametric 2.5D, not 3D**. Photorealistic preview and try-on
+remain **mocks** and are labelled as such in the UI.
+
 ## Verification
 
 The exact bytes GitHub serves were checked against a GitHub Pages simulator
-(sub-path serving plus 404.html fallback): 29/29 reviewer steps pass with zero
-console errors, and a reload on an in-app URL recovers. The CI-produced bundle
-is byte-identical to the one tested.
+(sub-path serving plus 404.html fallback): 30/30 reviewer steps pass with zero
+console errors, and a reload on an in-app URL recovers. The regression runs
+against the exact bytes fetched back from the published branch.
