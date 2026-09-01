@@ -20,10 +20,14 @@ on:
     branches: [claude/omani-dishdasha-ai-mvp-9ixppw]
   workflow_dispatch:
 
+# Only contents:write, to update the gh-pages branch. This workflow does NOT
+# call the Pages REST API: creating a Pages site needs repo-admin rights the
+# Actions token does not have ("Resource not accessible by integration"). The
+# site is published by pushing a branch instead, which the token can do, and
+# GitHub Pages serves it once the repository's Pages source is set to the
+# gh-pages branch.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # One review deployment at a time; a newer push supersedes an in-flight one.
 concurrency:
@@ -31,11 +35,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build-and-publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +50,22 @@ jobs:
       # Guard the review build: if the app does not typecheck or its engine
       # tests fail, publishing it for an audit would waste the reviewer's time.
       - run: npm run verify
+
+      # A Pages project site is served from /<repo>/, not from the domain root.
+      # Without this the router pushes absolute paths like /design, so the first
+      # in-app navigation walks off the site and a refresh hits GitHub's 404.
+      # Patched here rather than committed: the mobile build and the local dev
+      # server must keep serving from the root.
+      - name: Point the build at the Pages sub-path
+        run: |
+          node -e "
+            const fs = require('fs');
+            const base = '/' + process.env.GITHUB_REPOSITORY.split('/')[1];
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            cfg.expo.experiments = { ...(cfg.expo.experiments || {}), baseUrl: base };
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2) + '\n');
+            console.log('baseUrl =', base);
+          "
 
       - name: Build the standalone web export
         env:
@@ -83,14 +100,22 @@ jobs:
           fi
           echo "No secret-shaped strings found."
 
-      - uses: actions/configure-pages@v5
-        with:
-          # Turns Pages on for this repository if it is not already enabled.
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Publish to the gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          cp .github/workflows/gh-pages-README.md site/README.md
+          cd site
+          git init -q -b gh-pages
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          git commit -q -m "Publish review build from ${GITHUB_SHA::7}"
+          # Force-push: this branch is generated output with no history worth
+          # keeping, and the app's real history lives on the source branch.
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            gh-pages
+          echo "Published. Pages URL once enabled:"
+          echo "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"

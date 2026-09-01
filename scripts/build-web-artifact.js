@@ -42,21 +42,41 @@ const dataUri = (file) => {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 };
 
+/**
+ * A build may set `expo.experiments.baseUrl` so the app can be served from a
+ * sub-path (a GitHub Pages project site lives at /<repo>/). Every URL the
+ * export emits is then prefixed with it, while the files on disk are still
+ * laid out from the output directory's root — so the prefix has to come off
+ * before anything resolves. Reading it from app.json keeps one source of truth.
+ */
+const baseUrl = (
+  JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'))
+    .expo.experiments?.baseUrl ?? ''
+).replace(/\/$/, '');
+
+const stripBase = (url) =>
+  baseUrl && url.startsWith(baseUrl + '/') ? url.slice(baseUrl.length) : url;
+
 const html = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
 
 // 1. Locate and read the bundle.
 const scriptMatch = /<script src="([^"]+)"[^>]*><\/script>/.exec(html);
 if (!scriptMatch) throw new Error('no <script src> found in index.html');
-const bundlePath = path.join(distDir, scriptMatch[1].replace(/^\//, ''));
+const bundlePath = path.join(distDir, stripBase(scriptMatch[1]).replace(/^\//, ''));
 let bundle = fs.readFileSync(bundlePath, 'utf8');
 
 // 2. Replace referenced asset URLs with data URIs.
-const assetUrls = Array.from(new Set(bundle.match(/\/assets\/[^"'`\s)]+/g) ?? []));
+//    The prefix must be part of the matched URL: replacing only the /assets/…
+//    tail would leave the base path stranded in front of the data: URI.
+const assetPattern = baseUrl
+  ? new RegExp(`${baseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/assets/[^"'\`\\s)]+`, 'g')
+  : /\/assets\/[^"'`\s)]+/g;
+const assetUrls = Array.from(new Set(bundle.match(assetPattern) ?? []));
 let embedded = 0;
 let skipped = 0;
 
 for (const url of assetUrls) {
-  const file = path.join(distDir, url.replace(/^\//, ''));
+  const file = path.join(distDir, stripBase(url).replace(/^\//, ''));
   if (!fs.existsSync(file)) continue;
 
   const isFont = /\.(ttf|otf|woff2?)$/i.test(file);
