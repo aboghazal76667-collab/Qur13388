@@ -15,6 +15,24 @@ import type { EmbroideryZoneId } from '@dd/domain/omaniStyles';
 
 export const ASSET_CONTRACT_VERSION = 1;
 
+/**
+ * How good the asset behind a manifest actually is.
+ *
+ * PROFESSIONAL              a garment artist's production asset: separated
+ *                           semantic parts, clean topology, real material
+ *                           slots. Everything the app can do, it can do.
+ * TEMPORARY_REAL_3D_PROTOTYPE
+ *                           a real mesh, but a technical stand-in — typically
+ *                           a single fused geometry with one baked texture.
+ *                           It proves the 3D pipeline end to end. It is NOT
+ *                           production-ready, NOT authenticated as an accurate
+ *                           Omani garment, and cannot be recoloured per zone.
+ *
+ * The distinction is enforced, not documentary: `hasProfessionalAsset()` only
+ * counts PROFESSIONAL, and validation applies the full contract only to those.
+ */
+export type AssetQuality = 'PROFESSIONAL' | 'TEMPORARY_REAL_3D_PROTOTYPE';
+
 /** Semantic garment parts. The app reasons in these, never in mesh names. */
 export type GarmentZoneId =
   | 'body'
@@ -89,6 +107,8 @@ export type MorphTargetId =
 export type AssetManifest = {
   contractVersion: number;
   assetId: string;
+  /** PROFESSIONAL or a labelled prototype. Drives which rules apply below. */
+  assetQuality: AssetQuality;
   /** Which Omani style this asset represents. Must exist in OMANI_DISHDASHA_STYLES. */
   garmentStyle: string;
   /** Human version of the garment itself, e.g. "master-v1". */
@@ -99,6 +119,12 @@ export type AssetManifest = {
   scaleToMetres: number;
   /** Y-up and facing +Z is the contract; anything else must be corrected here. */
   orientation: { up: 'y' | 'z'; front: '+z' | '-z' | '+x' | '-x' };
+  /**
+   * Where the artist put the origin. The contract asks for 'hem' (hem plane,
+   * X/Z centred) so the renderer can frame and orbit without guessing; a
+   * 'bounds_centre' asset is recentred at load time instead of being rejected.
+   */
+  originPolicy: 'hem' | 'bounds_centre';
   nodes: Partial<Record<GarmentZoneId, NodeBinding>>;
   embroiderySurfaces: Partial<Record<EmbroiderySurfaceId, NodeBinding>>;
   furakhaNodes: Partial<Record<FurakhaZoneId, NodeBinding>>;
@@ -115,7 +141,17 @@ export type AssetManifest = {
   notes?: string;
 };
 
-export type ManifestIssue = { field: string; message: string; severity: 'error' | 'warning' };
+export type ManifestIssue = {
+  field: string;
+  message: string;
+  /**
+   * 'error'   blocks loading entirely
+   * 'warning' loads, but something is off
+   * 'info'    a known, accepted limitation of a prototype asset — recorded so
+   *           the gap between this asset and a professional one stays visible
+   */
+  severity: 'error' | 'warning' | 'info';
+};
 
 /**
  * Validates a manifest before the renderer trusts it.
@@ -125,6 +161,12 @@ export type ManifestIssue = { field: string; message: string; severity: 'error' 
  */
 export const validateManifest = (manifest: AssetManifest): ManifestIssue[] => {
   const issues: ManifestIssue[] = [];
+
+  // A prototype cannot meet the separated-geometry contract by definition:
+  // it is one fused mesh. Its shortfalls are recorded as 'info' so it can
+  // load, while the professional contract below stays exactly as strict.
+  const prototype = manifest.assetQuality === 'TEMPORARY_REAL_3D_PROTOTYPE';
+  const structural: ManifestIssue['severity'] = prototype ? 'info' : 'error';
 
   if (manifest.contractVersion !== ASSET_CONTRACT_VERSION) {
     issues.push({
@@ -136,15 +178,32 @@ export const validateManifest = (manifest: AssetManifest): ManifestIssue[] => {
 
   for (const zone of REQUIRED_GARMENT_ZONES) {
     if (!manifest.nodes[zone]?.node) {
-      issues.push({ field: `nodes.${zone}`, message: 'required garment zone is not bound', severity: 'error' });
+      issues.push({
+        field: `nodes.${zone}`,
+        message: prototype
+          ? 'not separately bound — the prototype is one fused mesh'
+          : 'required garment zone is not bound',
+        severity: structural,
+      });
     }
+  }
+
+  // Whatever its quality, an asset with no geometry at all is unrenderable.
+  if (Object.values(manifest.nodes).every((b) => !b?.node)) {
+    issues.push({ field: 'nodes', message: 'no garment geometry is bound at all', severity: 'error' });
   }
 
   // The furakha must be its own geometry. If it is baked into the body the app
   // cannot recolour it or change its length, so this is an error, not a nit.
   for (const zone of REQUIRED_FURAKHA_ZONES) {
     if (!manifest.furakhaNodes[zone]?.node) {
-      issues.push({ field: `furakhaNodes.${zone}`, message: 'furakha must be separate geometry, not baked into the body', severity: 'error' });
+      issues.push({
+        field: `furakhaNodes.${zone}`,
+        message: prototype
+          ? 'furakha is baked into the prototype mesh — it cannot be recoloured or resized'
+          : 'furakha must be separate geometry, not baked into the body',
+        severity: structural,
+      });
     }
   }
 
@@ -154,14 +213,32 @@ export const validateManifest = (manifest: AssetManifest): ManifestIssue[] => {
     Boolean(manifest.embroiderySurfaces.shaqLeftEmbroidery?.node) ||
     Boolean(manifest.embroiderySurfaces.shaqRightEmbroidery?.node);
   if (!hasShaqSurface) {
-    issues.push({ field: 'embroiderySurfaces', message: 'no shaq embroidery surface bound', severity: 'error' });
+    issues.push({
+      field: 'embroiderySurfaces',
+      message: prototype
+        ? 'no shaq embroidery surface — the prototype cannot show configured embroidery'
+        : 'no shaq embroidery surface bound',
+      severity: structural,
+    });
   }
 
   if (!manifest.materialSlots.fabric) {
-    issues.push({ field: 'materialSlots.fabric', message: 'fabric material slot is required', severity: 'error' });
+    issues.push({
+      field: 'materialSlots.fabric',
+      message: prototype
+        ? 'no fabric material slot — the prototype renders its own baked texture'
+        : 'fabric material slot is required',
+      severity: structural,
+    });
   }
   if (manifest.materialSlots.embroidery.length === 0) {
-    issues.push({ field: 'materialSlots.embroidery', message: 'at least one embroidery material slot is required', severity: 'error' });
+    issues.push({
+      field: 'materialSlots.embroidery',
+      message: prototype
+        ? 'no embroidery material slots — thread channels cannot be driven'
+        : 'at least one embroidery material slot is required',
+      severity: structural,
+    });
   }
 
   if (manifest.scaleToMetres <= 0) {
@@ -183,6 +260,32 @@ export const manifestIsUsable = (manifest: AssetManifest): boolean =>
   validateManifest(manifest).every((i) => i.severity !== 'error');
 
 /**
+ * What this asset cannot do, in plain language.
+ *
+ * For a professional asset this is empty. For a prototype it is the running
+ * list of everything a real garment asset would unlock — the honest gap, kept
+ * visible in the dev inspector instead of buried in a comment.
+ */
+export const prototypeLimitations = (manifest: AssetManifest): string[] => {
+  if (manifest.assetQuality !== 'TEMPORARY_REAL_3D_PROTOTYPE') return [];
+  return validateManifest(manifest)
+    .filter((i) => i.severity === 'info')
+    .map((i) => `${i.field}: ${i.message}`);
+};
+
+/**
+ * Whether the app may drive this asset's materials from the customer's design.
+ *
+ * False for a prototype with one fused mesh and one baked texture: recolouring
+ * it would tint the whole garment — furakha, cuff trim and all — to the fabric
+ * dye, which is worse than leaving the asset as its author made it.
+ */
+export const supportsDesignDrivenMaterials = (manifest: AssetManifest): boolean =>
+  manifest.assetQuality === 'PROFESSIONAL' &&
+  Boolean(manifest.materialSlots.fabric) &&
+  manifest.materialSlots.embroidery.length > 0;
+
+/**
  * Reference manifest, documenting exactly what the app expects.
  *
  * This is a SPECIFICATION, not a registered asset — there is no GLB behind it.
@@ -192,11 +295,13 @@ export const manifestIsUsable = (manifest: AssetManifest): boolean =>
 export const REFERENCE_MANIFEST: AssetManifest = {
   contractVersion: ASSET_CONTRACT_VERSION,
   assetId: 'reference_spec_only',
+  assetQuality: 'PROFESSIONAL',
   garmentStyle: 'om_standard',
   assetVersion: 'spec',
   units: 'm',
   scaleToMetres: 1,
   orientation: { up: 'y', front: '+z' },
+  originPolicy: 'hem',
   nodes: {
     body: { node: 'Dishdasha_Body', materialSlot: 'MAT_Fabric' },
     leftSleeve: { node: 'Dishdasha_Sleeve_L', materialSlot: 'MAT_Fabric' },

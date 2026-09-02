@@ -57,6 +57,23 @@ export const GLSurface: React.FC<GLSurfaceProps> = ({
     }),
   );
 
+  /**
+   * Draws exactly one frame, coalescing any number of changes made in the same
+   * tick into a single redraw.
+   *
+   * Deliberately NOT a permanent requestAnimationFrame loop. A garment that is
+   * not moving does not need redrawing, and a loop that never idles drains the
+   * battery and — on a slow GPU — keeps the main thread busy enough that taps
+   * elsewhere in the app stop registering.
+   */
+  const requestDraw = useCallback(() => {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      rendererRef.current?.render();
+    });
+  }, []);
+
   const start = useCallback(
     async (gl: GLContextLike) => {
       try {
@@ -66,6 +83,7 @@ export const GLSurface: React.FC<GLSurfaceProps> = ({
           height,
           pixelRatio: PixelRatio.get(),
           tier,
+          onInvalidate: requestDraw,
         });
         const result = await renderer.loadGarment(assetUri, manifest);
         if (!result.ok) {
@@ -75,18 +93,12 @@ export const GLSurface: React.FC<GLSurfaceProps> = ({
         }
         rendererRef.current = renderer;
         onReady(renderer);
-
-        const loop = () => {
-          if (!rendererRef.current) return;
-          rendererRef.current.render();
-          frameRef.current = requestAnimationFrame(loop);
-        };
-        loop();
+        requestDraw();
       } catch (error) {
         onFailed(error instanceof Error ? error.message : 'GL initialisation failed');
       }
     },
-    [assetUri, manifest, width, height, tier, onReady, onFailed],
+    [assetUri, manifest, width, height, tier, onReady, onFailed, requestDraw],
   );
 
   useEffect(
@@ -120,7 +132,17 @@ export const GLSurface: React.FC<GLSurfaceProps> = ({
       ref: canvasRef,
       width,
       height,
-      style: { width, height, display: 'block', backgroundColor: theme.color.bgSunken },
+      style: {
+        width,
+        height,
+        display: 'block',
+        backgroundColor: theme.color.bgSunken,
+        // The canvas is a drawing surface, never a pointer target: the
+        // wrapping View owns drag and pinch. Leaving it hit-testable makes it
+        // intercept clicks meant for screens pushed above the one it lives on,
+        // because a previous screen stays mounted in the DOM.
+        pointerEvents: 'none',
+      },
     });
   }
 
@@ -136,6 +158,7 @@ export const GLSurface: React.FC<GLSurfaceProps> = ({
   return (
     <GLView
       style={{ width, height }}
+      pointerEvents="none"
       onContextCreate={(gl: GLContextLike) => {
         markNativeGlAvailable();
         void start(gl);

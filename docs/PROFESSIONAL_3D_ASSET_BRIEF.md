@@ -3,9 +3,13 @@
 **To:** garment 3D artist (Blender / CLO3D / Marvelous Designer)
 **Deliverable:** one production GLB of an Omani dishdasha, plus textures and a
 completed manifest
-**Status of the receiving application:** the renderer is finished and waiting.
-`src/render/assetRegistry.ts` is deliberately empty. The moment a GLB passes
-the acceptance gate in §14, real 3D goes live for customers with no further
+**Status of the receiving application:** the renderer is finished, live, and
+currently driving a **temporary single-mesh prototype** so the pipeline could
+be proved end to end (`docs/TEMPORARY_3D_PROTOTYPE.md`). That prototype has no
+separated parts, so the customer's fabric, colour, thread and furakha choices
+do not reach it. Delivering the asset below is what turns those choices back
+on: registering it with `quality: 'PROFESSIONAL'` and a complete manifest
+switches the design-driven material path on by itself, with no further
 application work.
 
 Read alongside:

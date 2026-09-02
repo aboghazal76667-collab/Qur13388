@@ -7,10 +7,19 @@ import {
   REQUIRED_FURAKHA_ZONES,
   REQUIRED_GARMENT_ZONES,
   manifestIsUsable,
+  prototypeLimitations,
+  supportsDesignDrivenMaterials,
   validateManifest,
   type AssetManifest,
 } from '@dd/render/assetManifest';
-import { GARMENT_ASSETS, customerReadyAsset, hasProfessionalAsset } from '@dd/render/assetRegistry';
+import {
+  GARMENT_ASSETS,
+  customerReadyAsset,
+  hasProfessionalAsset,
+  hasPrototypeAsset,
+} from '@dd/render/assetRegistry';
+import { PROTOTYPE_MANIFEST, PROTOTYPE_SOURCE_REPAIRS } from '@dd/render/prototypeManifest';
+import { resolveAssetUri } from '@dd/render/assetSource';
 import {
   fallbackAfterLoadFailure,
   REASON_LABELS,
@@ -40,17 +49,42 @@ import { createDefaultConfig } from '@dd/engine/design';
 
 // ── honest state of the 3D path ─────────────────────────────────────────────
 describe('professional asset state', () => {
-  it('registers no professional 3D asset — the honest current state', () => {
-    expect(Object.keys(GARMENT_ASSETS)).toHaveLength(0);
+  it('still registers NO professional 3D asset', () => {
+    // The prototype does not move this answer, and nothing may make it.
     expect(hasProfessionalAsset()).toBe(false);
+    expect(customerReadyAsset('om_standard')).toBe(null);
+    expect(
+      Object.values(GARMENT_ASSETS).every((a) => a.quality !== 'PROFESSIONAL'),
+    ).toBe(true);
+  });
+
+  it('registers the temporary prototype under its real quality label', () => {
+    expect(hasPrototypeAsset()).toBe(true);
+    const asset = GARMENT_ASSETS.om_standard;
+    expect(asset.quality).toBe('TEMPORARY_REAL_3D_PROTOTYPE');
+    expect(asset.manifest.assetQuality).toBe('TEMPORARY_REAL_3D_PROTOTYPE');
+    // A prototype must never be recorded as having passed the visual gate.
+    expect(asset.manifest.visuallyAccepted).toBe(false);
+  });
+
+  it('will not let a prototype through the customer-ready gate', () => {
+    // Even with every flag flipped on, quality alone disqualifies it.
+    const forced = {
+      ...GARMENT_ASSETS.om_standard,
+      approvedForCustomers: true,
+      manifest: { ...GARMENT_ASSETS.om_standard.manifest, visuallyAccepted: true },
+    };
+    expect(forced.quality).toBe('TEMPORARY_REAL_3D_PROTOTYPE');
     expect(customerReadyAsset('om_standard')).toBe(null);
   });
 
-  it('sends every customer to the V2 fallback while no asset exists', () => {
+  it('renders the prototype, and names it a prototype when it does', () => {
     const selection = selectRenderer({ styleId: 'om_standard', webglAvailable: true });
-    expect(selection.kind).toBe('v2fallback');
-    expect(selection.reason).toBe('no_professional_asset');
-    expect(selection.assetUri).toBe(null);
+    expect(selection.kind).toBe('real3d');
+    // Not 'asset_available' — that reason is reserved for a professional asset.
+    expect(selection.reason).toBe('prototype_asset');
+    expect(selection.assetQuality).toBe('TEMPORARY_REAL_3D_PROTOTYPE');
+    expect(selection.assetUri).toBe('bundled:omani_dishdasha_prototype_v1');
   });
 
   it('reports the V2 fallback as NOT a true mesh', () => {
@@ -58,8 +92,82 @@ describe('professional asset state', () => {
   });
 });
 
+// ── the temporary prototype asset ───────────────────────────────────────────
+describe('temporary real-3D prototype', () => {
+  it('loads: its manifest has no blocking errors', () => {
+    expect(manifestIsUsable(PROTOTYPE_MANIFEST)).toBe(true);
+    expect(validateManifest(PROTOTYPE_MANIFEST).filter((i) => i.severity === 'error')).toHaveLength(0);
+  });
+
+  it('records every contract requirement it cannot meet', () => {
+    const limitations = prototypeLimitations(PROTOTYPE_MANIFEST);
+    expect(limitations.length > 0).toBe(true);
+    // The gap to a professional asset stays visible, not silently tolerated.
+    expect(limitations.some((l) => l.startsWith('furakhaNodes.'))).toBe(true);
+    expect(limitations.some((l) => l.startsWith('embroiderySurfaces'))).toBe(true);
+    expect(limitations.some((l) => l.startsWith('nodes.shaq'))).toBe(true);
+  });
+
+  it('refuses design-driven materials, because it is one fused mesh', () => {
+    expect(supportsDesignDrivenMaterials(PROTOTYPE_MANIFEST)).toBe(false);
+    expect(supportsDesignDrivenMaterials(REFERENCE_MANIFEST)).toBe(true);
+  });
+
+  it('binds real geometry — a manifest binding nothing is still rejected', () => {
+    expect(PROTOTYPE_MANIFEST.nodes.body?.node).toBe('geometry_0');
+    const empty = { ...PROTOTYPE_MANIFEST, nodes: {} };
+    expect(manifestIsUsable(empty)).toBe(false);
+  });
+
+  it('carries the scale and origin correction the source file needs', () => {
+    // The mesh is normalised to 1.0 unit tall and centred on its bounds, so
+    // both numbers have to be right or the garment orbits around its waist.
+    expect(PROTOTYPE_MANIFEST.scaleToMetres).toBe(1.46);
+    expect(PROTOTYPE_MANIFEST.originPolicy).toBe('bounds_centre');
+    expect(PROTOTYPE_MANIFEST.orientation).toEqual({ up: 'y', front: '+z' });
+  });
+
+  it('names the source defects the renderer repairs at load', () => {
+    // No NORMAL attribute, and glTF's metallicFactor default of 1.0.
+    expect(PROTOTYPE_SOURCE_REPAIRS.computeVertexNormals).toBe(true);
+    expect(PROTOTYPE_SOURCE_REPAIRS.forceNonMetallic).toBe(true);
+  });
+
+  it('stays within the mobile triangle budget', () => {
+    expect(PROTOTYPE_MANIFEST.triangleCount).toBe(17512);
+    expect(validateManifest(PROTOTYPE_MANIFEST).some((i) => i.field === 'triangleCount')).toBe(false);
+  });
+
+  it('keeps the professional contract strict for professional assets', () => {
+    // The relaxation is scoped to the quality label and nothing else: the same
+    // shape declared PROFESSIONAL must still be rejected outright.
+    const pretending = { ...PROTOTYPE_MANIFEST, assetQuality: 'PROFESSIONAL' as const };
+    expect(manifestIsUsable(pretending)).toBe(false);
+    expect(prototypeLimitations(pretending)).toHaveLength(0);
+  });
+});
+
 // ── renderer selection ──────────────────────────────────────────────────────
 describe('renderer selection', () => {
+  it('never returns a real3d selection without an asset quality', () => {
+    // The pair must always agree: reporting 3D without saying what kind of
+    // asset is behind it is how a prototype gets mistaken for a product.
+    for (const input of [
+      { styleId: 'om_standard', webglAvailable: true },
+      { styleId: 'om_standard', webglAvailable: false },
+      { styleId: 'unknown_style', webglAvailable: true },
+    ]) {
+      const s = selectRenderer(input);
+      expect(s.kind === 'real3d' ? s.assetQuality !== null : s.assetQuality === null).toBe(true);
+    }
+  });
+
+  it('falls back for a style that has no asset at all', () => {
+    const s = selectRenderer({ styleId: 'unknown_style', webglAvailable: true });
+    expect(s.kind).toBe('v2fallback');
+    expect(s.reason).toBe('no_professional_asset');
+  });
+
   it('falls back when WebGL is unavailable', () => {
     const s = selectRenderer({ styleId: 'om_standard', webglAvailable: false });
     expect(s.kind).toBe('v2fallback');
@@ -439,6 +547,19 @@ describe('GarmentSpec is the single source of truth', () => {
     };
     const other = buildGarmentSpec(oneChannel, DEMO_MEASUREMENTS[0], 0);
     expect(other.configHash === spec.configHash).toBeFalsy();
+  });
+
+  it('resolves a bundled asset id, and reports honestly when it cannot', async () => {
+    // Outside a Metro bundle the binary is unreachable; that must be a null,
+    // not a throw, so the viewer falls back instead of crashing.
+    const resolved = await resolveAssetUri('bundled:omani_dishdasha_prototype_v1');
+    expect(resolved === null || typeof resolved === 'string').toBe(true);
+  });
+
+  it('passes a plain URL through untouched', async () => {
+    expect(await resolveAssetUri('https://example.test/garment.glb')).toBe(
+      'https://example.test/garment.glb',
+    );
   });
 
   it('reports honestly that the fallback cannot capture a raster preview', async () => {

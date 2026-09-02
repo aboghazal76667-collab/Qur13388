@@ -12,7 +12,7 @@
  */
 import type { DesignConfig, FabricTexture, MeasurementProfile } from '@dd/domain/types';
 import type { GarmentSpec } from '@dd/services/ai/photorealistic';
-import type { AssetManifest } from './assetManifest';
+import type { AssetManifest, AssetQuality } from './assetManifest';
 import type { CameraPresetId } from './cameraPresets';
 import type { RenderTier } from './quality3d';
 
@@ -21,6 +21,8 @@ export type RendererKind = 'real3d' | 'v2fallback';
 /** Why a renderer was chosen. Surfaced in the dev inspector, never to customers. */
 export type RendererSelectionReason =
   | 'asset_available'
+  /** A real mesh is loaded, but it is a labelled prototype, not a product asset. */
+  | 'prototype_asset'
   | 'no_professional_asset'
   | 'webgl_unavailable'
   | 'asset_load_failed'
@@ -101,6 +103,8 @@ export type RendererSelection = {
   reason: RendererSelectionReason;
   assetUri: string | null;
   manifest: AssetManifest | null;
+  /** Null when no asset is involved. Never inferred — it comes from the registry. */
+  assetQuality: AssetQuality | null;
 };
 
 /** Inputs a viewer needs regardless of which renderer serves it. */

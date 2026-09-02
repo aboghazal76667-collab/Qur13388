@@ -14,10 +14,19 @@ export const detectWebglSupport = (): boolean => {
 
   if (Platform.OS !== 'web') {
     // On native the GL context comes from expo-gl, which ships in Expo Go for
-    // this SDK. Availability is confirmed when GLView actually hands us a
-    // context; assuming it here would be optimistic, so we say no until the
-    // surface reports otherwise.
-    cached = false;
+    // this SDK. The context itself only arrives when GLView mounts, so the
+    // best answer available here is whether the native module is installed at
+    // all. Saying "no" instead would be a deadlock: the 3D path would never be
+    // selected, so GLView would never mount, so nothing would ever report a
+    // context. A module that is present but fails to produce a context is
+    // caught by the load-failure fallback, which is where it belongs.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const gl = require('expo-gl') as { GLView?: unknown };
+      cached = Boolean(gl?.GLView);
+    } catch {
+      cached = false;
+    }
     return cached;
   }
 

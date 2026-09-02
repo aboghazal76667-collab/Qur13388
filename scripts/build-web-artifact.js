@@ -34,6 +34,10 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
+  // The 3D garment. Inlining it is what keeps the review page free of external
+  // requests; it is also the largest single asset, so its cost is reported.
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
 };
 
 const dataUri = (file) => {

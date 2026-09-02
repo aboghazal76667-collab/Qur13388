@@ -6,10 +6,17 @@
  * it does not swap pictures.
  *
  * =====================================================================
- * IT HAS NO GARMENT TO RENDER YET. `assetRegistry` is empty, so in
- * production the adapter never selects this renderer and every customer
- * sees V2FallbackRenderer. This class is complete and exercisable, but
- * "the engine is ready" is NOT the same claim as "the garment looks real".
+ * WHAT IT IS RENDERING TODAY is a TEMPORARY_REAL_3D_PROTOTYPE: a real
+ * single-mesh GLB, not a professional garment asset. It is genuinely one
+ * mesh orbited by one camera — that part is real — but the asset itself
+ * is a technical stand-in. "The pipeline is real" is NOT the same claim
+ * as "the garment is production quality".
+ *
+ * A prototype has no separated parts and one baked texture, so the
+ * design-driven material path is switched OFF for it (see
+ * `supportsDesignDrivenMaterials`): tinting a fused mesh would recolour the
+ * furakha and the trim along with the cloth, which is worse than leaving
+ * the asset as authored.
  * =====================================================================
  *
  * three.js was chosen over react-three-fiber deliberately: this contract is
@@ -26,7 +33,9 @@ import { hexToHsl } from '@dd/engine/color';
 import type { FabricTexture } from '@dd/domain/types';
 import type { GarmentSpec } from '@dd/services/ai/photorealistic';
 import type { AssetManifest, EmbroiderySurfaceId, GarmentZoneId } from '../assetManifest';
-import { manifestIsUsable, validateManifest } from '../assetManifest';
+import { manifestIsUsable, supportsDesignDrivenMaterials, validateManifest } from '../assetManifest';
+import { PROTOTYPE_SOURCE_REPAIRS } from '../prototypeManifest';
+import { resolveAssetUri } from '../assetSource';
 import { CAMERA_PRESETS, clampElevation, clampZoom, type CameraPresetId } from '../cameraPresets';
 import { STUDIO_RIG, TONE_MAPPING, exposureFor } from '../lighting';
 import { fabricToPbr, recolour, threadToPbr, type Pbr } from '../materials3d';
@@ -55,6 +64,15 @@ export type Real3DOptions = {
   pixelRatio: number;
   tier: RenderTier;
   onFrame?: () => void;
+  /**
+   * Called whenever the scene changes and needs redrawing.
+   *
+   * The renderer draws ON DEMAND, not in a permanent loop. A garment that is
+   * not moving is a still image: re-rendering it sixty times a second burns
+   * battery on a phone and, on a slower GPU, starves the main thread badly
+   * enough that ordinary taps elsewhere in the app stop landing.
+   */
+  onInvalidate?: () => void;
 };
 
 export class Real3DRenderer implements GarmentRenderer {
@@ -85,7 +103,15 @@ export class Real3DRenderer implements GarmentRenderer {
   /** One material per thread channel, so channels stay independent. */
   private threadMaterials = new Map<1 | 2 | 3, THREE.MeshPhysicalMaterial>();
 
+  /**
+   * False for a prototype: the app keeps the asset's authored materials and
+   * does not drive colour, weave, thread or furakha from the design.
+   */
+  private designDrivenMaterials = false;
+
   private view: ViewState = { azimuth: 0, elevation: 4, zoom: 1 };
+  /** Set by every mutation; the surface turns it into exactly one redraw. */
+  private needsRender = true;
   private target = new THREE.Vector3(0, 0.85, 0);
   private radius = 3.4;
   private disposed = false;
@@ -155,20 +181,22 @@ export class Real3DRenderer implements GarmentRenderer {
       return { ok: false, reason: `manifest invalid — ${errors.join('; ')}` };
     }
 
+    // A registry uri may be a bundled module id rather than a fetchable URL.
+    const resolved = await resolveAssetUri(assetUri);
+    if (!resolved) {
+      return { ok: false, reason: `asset source could not be resolved: ${assetUri}` };
+    }
+
     try {
-      const gltf = await new GLTFLoader().loadAsync(assetUri);
+      const gltf = await new GLTFLoader().loadAsync(resolved);
       const model = gltf.scene;
 
-      // Normalise to the contract: metres, Y-up, facing the camera.
-      model.scale.setScalar(manifest.scaleToMetres);
-      if (manifest.orientation.front === '-z') model.rotation.y = Math.PI;
-      if (manifest.orientation.front === '+x') model.rotation.y = -Math.PI / 2;
-      if (manifest.orientation.front === '-x') model.rotation.y = Math.PI / 2;
-
+      this.normaliseModel(model, manifest);
+      this.prepareMeshes(model, manifest);
       this.bindSemanticZones(model, manifest);
 
-      // A missing required zone means the GLB and its manifest disagree; that
-      // must fail to the fallback rather than render a garment with no shaq.
+      // A missing bound node means the GLB and its manifest disagree; that must
+      // fail to the fallback rather than render a garment with no shaq.
       const missing = [...this.requiredZones(manifest)].filter((z) => !this.zoneObjects.has(z));
       if (missing.length > 0) {
         return { ok: false, reason: `asset is missing bound nodes: ${missing.join(', ')}` };
@@ -177,11 +205,78 @@ export class Real3DRenderer implements GarmentRenderer {
       this.root.clear();
       this.root.add(model);
       this.manifest = manifest;
+      this.designDrivenMaterials = supportsDesignDrivenMaterials(manifest);
       this.frameGarment(model);
+      this.invalidate();
       return { ok: true, manifest };
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : 'GLB load failed' };
     }
+  }
+
+  /**
+   * Puts the model where the contract says it should be: metres, Y-up, facing
+   * the camera, hem on the ground plane.
+   *
+   * The recentre exists because an asset authored around its bounding-box
+   * centre (a reconstruction, typically) would otherwise orbit around its
+   * waist and frame half a garment.
+   */
+  private normaliseModel(model: THREE.Object3D, manifest: AssetManifest) {
+    model.scale.setScalar(manifest.scaleToMetres);
+    if (manifest.orientation.front === '-z') model.rotation.y = Math.PI;
+    if (manifest.orientation.front === '+x') model.rotation.y = -Math.PI / 2;
+    if (manifest.orientation.front === '-x') model.rotation.y = Math.PI / 2;
+
+    if (manifest.originPolicy !== 'bounds_centre') return;
+
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const centre = box.getCenter(new THREE.Vector3());
+    // X/Z to the axis of rotation, Y so the hem rests at zero.
+    model.position.set(-centre.x, -box.min.y, -centre.z);
+    model.updateMatrixWorld(true);
+  }
+
+  /**
+   * Repairs defects in the source file that would otherwise read as product
+   * bugs, and enables shadows.
+   *
+   * These are corrections to what the exporter omitted, not decoration:
+   * without normals the mesh renders unlit, and glTF's metallicFactor default
+   * of 1.0 turns cotton into dark grey metal. See PROTOTYPE_SOURCE_REPAIRS.
+   */
+  private prepareMeshes(model: THREE.Object3D, manifest: AssetManifest) {
+    const prototype = manifest.assetQuality === 'TEMPORARY_REAL_3D_PROTOTYPE';
+
+    model.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+      if (geometry && !geometry.attributes.normal) geometry.computeVertexNormals();
+
+      if (!prototype) return;
+
+      for (const material of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as
+        THREE.MeshStandardMaterial[]) {
+        if (!material) continue;
+        if (PROTOTYPE_SOURCE_REPAIRS.renderDoubleSided) material.side = THREE.DoubleSide;
+        if (PROTOTYPE_SOURCE_REPAIRS.forceNonMetallic) {
+          material.metalness = 0;
+          material.roughness = PROTOTYPE_SOURCE_REPAIRS.roughness;
+        }
+        const physical = material as THREE.MeshPhysicalMaterial;
+        if (physical.sheen !== undefined) {
+          physical.sheen = PROTOTYPE_SOURCE_REPAIRS.sheen;
+          physical.sheenRoughness = PROTOTYPE_SOURCE_REPAIRS.sheenRoughness;
+        }
+        material.needsUpdate = true;
+      }
+    });
   }
 
   private requiredZones(manifest: AssetManifest): GarmentZoneId[] {
@@ -211,12 +306,6 @@ export class Real3DRenderer implements GarmentRenderer {
     }
     this.furakhaGroup = furakha.children.length > 0 ? furakha : null;
 
-    model.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-    });
   }
 
   /** Frames the garment so it fills the view the way the reference does. */
@@ -233,6 +322,16 @@ export class Real3DRenderer implements GarmentRenderer {
 
   // ── spec application ────────────────────────────────────────────────────
   applyGarmentSpec(spec: GarmentSpec): void {
+    // A prototype is one fused mesh with one baked texture. Driving materials
+    // from the design would tint the furakha and the trim along with the
+    // cloth, so the asset is left exactly as its author made it — and the
+    // renderer says so rather than pretending the design was applied.
+    if (!this.designDrivenMaterials) {
+      this.renderer.toneMappingExposure = TONE_MAPPING.baseExposure;
+      this.invalidate();
+      return;
+    }
+
     this.setFabric(spec.fabric.texture);
     this.setFabricColor(spec.colour.hex);
 
@@ -249,7 +348,16 @@ export class Real3DRenderer implements GarmentRenderer {
       TONE_MAPPING.baseExposure * exposureFor(hexToHsl(spec.colour.hex).l);
   }
 
+  /**
+   * Whether the loaded asset's materials are driven by the customer's design.
+   * False for a prototype — reported honestly rather than silently ignored.
+   */
+  get materialsFollowDesign(): boolean {
+    return this.designDrivenMaterials;
+  }
+
   setFabric(texture: FabricTexture): void {
+    if (!this.designDrivenMaterials) return;
     this.fabricMaterial = this.ensureFabricMaterial();
     // Keep the dye, swap the cloth: the customer changed fabric, not colour.
     const currentHex = `#${this.fabricMaterial.color.getHexString()}`;
@@ -257,6 +365,7 @@ export class Real3DRenderer implements GarmentRenderer {
   }
 
   setFabricColor(hex: string): void {
+    if (!this.designDrivenMaterials) return;
     this.fabricMaterial = this.ensureFabricMaterial();
     const current = this.readPbr(this.fabricMaterial);
     // ONLY the colour changes; weave, roughness and sheen are the cloth's.
@@ -264,6 +373,7 @@ export class Real3DRenderer implements GarmentRenderer {
   }
 
   setEmbroidery(patternId: string | null): void {
+    if (!this.designDrivenMaterials) return;
     // Placement comes from the renderer-independent system, so the 3D path and
     // the vector fallback can never disagree about which zones are embroidered.
     const pattern = getPattern(patternId);
@@ -277,16 +387,20 @@ export class Real3DRenderer implements GarmentRenderer {
     for (const [surface, object] of this.embroideryObjects) {
       object.visible = activeSurfaces.has(surface);
     }
+    this.invalidate();
   }
 
   setEmbroideryThread(channel: 1 | 2 | 3, hex: string, metallic = false): void {
+    if (!this.designDrivenMaterials) return;
     // Only this channel's material is touched, so threads stay independent.
     this.applyPbr(this.ensureThreadMaterial(channel), threadToPbr(threadMaterial(hex, metallic)));
   }
 
   setFurakha(config: { lengthMm: number; hex: string } | null): void {
+    if (!this.designDrivenMaterials) return;
     if (!this.furakhaGroup) return;
     this.furakhaGroup.visible = config !== null;
+    this.invalidate();
     if (!config) return;
     this.furakhaGroup.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -331,6 +445,17 @@ export class Real3DRenderer implements GarmentRenderer {
     return material;
   }
 
+  /** Marks the scene dirty and asks the surface for a frame. */
+  private invalidate() {
+    this.needsRender = true;
+    this.options.onInvalidate?.();
+  }
+
+  /** True when something changed since the last draw. */
+  get isDirty(): boolean {
+    return this.needsRender;
+  }
+
   private applyPbr(material: THREE.MeshPhysicalMaterial, pbr: Pbr) {
     material.color.set(pbr.color);
     material.roughness = pbr.roughness;
@@ -342,6 +467,7 @@ export class Real3DRenderer implements GarmentRenderer {
     material.opacity = pbr.opacity;
     material.transparent = pbr.opacity < 1;
     material.needsUpdate = true;
+    this.invalidate();
   }
 
   private readPbr(material: THREE.MeshPhysicalMaterial): Pbr {
@@ -395,6 +521,7 @@ export class Real3DRenderer implements GarmentRenderer {
       this.target.z + r * Math.cos(el) * Math.cos(az),
     );
     this.camera.lookAt(this.target);
+    this.invalidate();
   }
 
   setTier(tier: RenderTier): void {
@@ -402,11 +529,13 @@ export class Real3DRenderer implements GarmentRenderer {
     const settings = TIER_SETTINGS[tier];
     this.renderer.setPixelRatio(Math.min(this.options.pixelRatio, settings.maxPixelRatio));
     this.renderer.shadowMap.enabled = settings.shadows;
+    this.invalidate();
   }
 
   // ── frame ───────────────────────────────────────────────────────────────
   render(): void {
     if (this.disposed) return;
+    this.needsRender = false;
     this.renderer.render(this.scene, this.camera);
     // expo-gl requires this to present the frame; web ignores it.
     this.options.gl.endFrameEXP?.();

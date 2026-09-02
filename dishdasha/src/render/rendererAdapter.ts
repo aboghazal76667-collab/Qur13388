@@ -1,20 +1,20 @@
 /**
  * RENDERER ADAPTER — chooses which engine draws the garment.
  *
- * The decision is deliberately conservative. A customer only reaches the 3D
- * path when EVERY condition holds:
+ * Two doors lead to the 3D path, and they are not the same door:
  *
- *   1. a professional asset is registered for the style,
- *   2. its manifest validates,
- *   3. it passed the visual acceptance gate,
- *   4. it is approved for customers,
- *   5. the device can actually run WebGL.
+ *   PROFESSIONAL asset  registered, manifest valid against the full contract,
+ *                       visual acceptance gate passed, approved. Nothing has
+ *                       come through this door yet.
+ *   PROTOTYPE asset     a real mesh registered as TEMPORARY_REAL_3D_PROTOTYPE.
+ *                       Renders, and is labelled as a prototype everywhere it
+ *                       is reported. This is the door in use today.
  *
- * The registry is empty today, so condition 1 fails and every customer gets
- * the V2 fallback. That is the intended state: no visual regression, and the
- * 3D path proves itself before anyone sees it.
+ * Either way the device must be able to run WebGL, and any failure — no asset,
+ * no WebGL, a low-power device, a GLB that will not load — lands on the V2
+ * fallback rather than on a broken screen.
  */
-import { customerReadyAsset, hasProfessionalAsset } from './assetRegistry';
+import { hasProfessionalAsset, renderableAsset } from './assetRegistry';
 import type { RendererSelection, RendererSelectionReason } from './types';
 
 export type SelectionInput = {
@@ -26,11 +26,17 @@ export type SelectionInput = {
 };
 
 export const selectRenderer = (input: SelectionInput): RendererSelection => {
-  if (input.force === 'v2fallback') {
-    return { kind: 'v2fallback', reason: 'forced_by_flag', assetUri: null, manifest: null };
-  }
+  const none = (reason: RendererSelectionReason): RendererSelection => ({
+    kind: 'v2fallback',
+    reason,
+    assetUri: null,
+    manifest: null,
+    assetQuality: null,
+  });
 
-  const asset = customerReadyAsset(input.styleId);
+  if (input.force === 'v2fallback') return none('forced_by_flag');
+
+  const asset = renderableAsset(input.styleId);
 
   if (input.force === 'real3d') {
     return {
@@ -38,25 +44,23 @@ export const selectRenderer = (input: SelectionInput): RendererSelection => {
       reason: 'forced_by_flag',
       assetUri: asset?.uri ?? null,
       manifest: asset?.manifest ?? null,
+      assetQuality: asset?.quality ?? null,
     };
   }
 
-  if (!input.webglAvailable) {
-    return { kind: 'v2fallback', reason: 'webgl_unavailable', assetUri: null, manifest: null };
-  }
-  if (input.lowPower) {
-    return { kind: 'v2fallback', reason: 'low_power_device', assetUri: null, manifest: null };
-  }
-  if (!asset) {
-    return {
-      kind: 'v2fallback',
-      reason: 'no_professional_asset',
-      assetUri: null,
-      manifest: null,
-    };
-  }
+  if (!input.webglAvailable) return none('webgl_unavailable');
+  if (input.lowPower) return none('low_power_device');
+  if (!asset) return none('no_professional_asset');
 
-  return { kind: 'real3d', reason: 'asset_available', assetUri: asset.uri, manifest: asset.manifest };
+  return {
+    kind: 'real3d',
+    // The reason names what is actually loaded, so nothing downstream can
+    // report a prototype as a professional asset.
+    reason: asset.quality === 'PROFESSIONAL' ? 'asset_available' : 'prototype_asset',
+    assetUri: asset.uri,
+    manifest: asset.manifest,
+    assetQuality: asset.quality,
+  };
 };
 
 /** Applied after a load attempt fails, so a bad asset degrades rather than breaks. */
@@ -65,10 +69,12 @@ export const fallbackAfterLoadFailure = (): RendererSelection => ({
   reason: 'asset_load_failed',
   assetUri: null,
   manifest: null,
+  assetQuality: null,
 });
 
 export const REASON_LABELS: Record<RendererSelectionReason, string> = {
   asset_available: 'Professional 3D asset loaded',
+  prototype_asset: 'Temporary real-3D prototype loaded — not a professional asset',
   no_professional_asset: 'No professional 3D asset registered — using V2 fallback',
   webgl_unavailable: 'WebGL unavailable on this device — using V2 fallback',
   asset_load_failed: 'GLB failed to load — using V2 fallback',

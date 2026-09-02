@@ -6,8 +6,13 @@ import { Badge, Button, Card, Chip, Notice, Row, Section, T } from '@dd/componen
 import { GarmentViewer } from '@dd/components/dishdasha/GarmentViewer';
 import { ENV } from '@dd/config/env';
 import { useI18n } from '@dd/i18n';
-import { REFERENCE_MANIFEST, validateManifest } from '@dd/render/assetManifest';
-import { hasProfessionalAsset } from '@dd/render/assetRegistry';
+import {
+  REFERENCE_MANIFEST,
+  prototypeLimitations,
+  supportsDesignDrivenMaterials,
+  validateManifest,
+} from '@dd/render/assetManifest';
+import { GARMENT_ASSETS, hasProfessionalAsset, renderableAsset } from '@dd/render/assetRegistry';
 import { REASON_LABELS, selectRenderer } from '@dd/render/rendererAdapter';
 import { detectWebglSupport } from '@dd/render/real3d/webglSupport';
 import { ACCEPTANCE_CHECKS, evaluateAcceptance } from '@dd/render/visualAcceptance';
@@ -40,6 +45,8 @@ export default function VisualInspector() {
     [webgl, forced],
   );
   const manifestIssues = validateManifest(REFERENCE_MANIFEST);
+  const loaded = renderableAsset('om_standard');
+  const limitations = loaded ? prototypeLimitations(loaded.manifest) : [];
   // Nothing has been reviewed, so every blocking check is unanswered — which
   // the gate correctly treats as NOT accepted.
   const acceptance = evaluateAcceptance({});
@@ -63,6 +70,13 @@ export default function VisualInspector() {
               <Row justify="space-between">
                 <T variant="small">Professional 3D asset registered</T>
                 <Badge label={hasProfessionalAsset() ? 'YES' : 'NO'} tone={hasProfessionalAsset() ? 'success' : 'warning'} />
+              </Row>
+              <Row justify="space-between">
+                <T variant="small">Loaded asset quality</T>
+                <Badge
+                  label={loaded ? loaded.quality : 'NONE'}
+                  tone={loaded?.quality === 'PROFESSIONAL' ? 'success' : 'warning'}
+                />
               </Row>
               <Row justify="space-between">
                 <T variant="small">WebGL available</T>
@@ -123,6 +137,44 @@ export default function VisualInspector() {
             </View>
           </Card>
         </Section>
+
+        {loaded ? (
+          <Section title="Loaded asset">
+            <Card>
+              <View style={{ gap: 6 }}>
+                <T variant="small" weight="600">
+                  {loaded.label}
+                </T>
+                <T variant="tiny" color={theme.color.textMuted}>
+                  {loaded.manifest.assetId} · {loaded.manifest.assetVersion} ·{' '}
+                  {loaded.manifest.triangleCount.toLocaleString('en')} triangles
+                </T>
+                <Row justify="space-between">
+                  <T variant="tiny">Materials driven by the design</T>
+                  <Badge
+                    label={supportsDesignDrivenMaterials(loaded.manifest) ? 'YES' : 'NO'}
+                    tone={supportsDesignDrivenMaterials(loaded.manifest) ? 'success' : 'warning'}
+                  />
+                </Row>
+                {limitations.length > 0 ? (
+                  <>
+                    <T variant="tiny" weight="600" color={theme.color.warning}>
+                      Prototype limitations ({limitations.length})
+                    </T>
+                    {limitations.map((l, i) => (
+                      <T key={i} variant="tiny" color={theme.color.textFaint}>
+                        · {l}
+                      </T>
+                    ))}
+                  </>
+                ) : null}
+                <T variant="tiny" color={theme.color.textFaint}>
+                  {loaded.manifest.notes}
+                </T>
+              </View>
+            </Card>
+          </Section>
+        ) : null}
 
         <Section title={`Visual acceptance gate (${acceptance.passed}/${acceptance.total})`}>
           <Card>

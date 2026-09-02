@@ -1,10 +1,13 @@
 # Real 3D renderer — technology decision
 
-Status: **decided and implemented**. The renderer described here is built,
-compiles, is covered by tests, and is selected at runtime by
-`src/render/rendererAdapter.ts`. It is not yet visible to customers, because
-no professional garment asset exists — see
-`docs/PROFESSIONAL_3D_ASSET_BRIEF.md`.
+Status: **decided, implemented and live**. The renderer described here is
+built, compiles, is covered by tests, and is selected at runtime by
+`src/render/rendererAdapter.ts`.
+
+It is now rendering for customers — but on a **temporary prototype asset**,
+not a professional one. See `docs/TEMPORARY_3D_PROTOTYPE.md` for exactly what
+that asset is and what it cannot do, and
+`docs/PROFESSIONAL_3D_ASSET_BRIEF.md` for the asset that replaces it.
 
 ---
 
@@ -110,7 +113,7 @@ Filament, or adding an R3F variant, touches one directory.
 1. the force-fallback flag is set,
 2. WebGL is unavailable,
 3. the device reports low power,
-4. **no customer-ready asset is registered** (today's case, always).
+4. no renderable asset is registered for the style.
 
 `fallbackAfterLoadFailure()` covers the runtime case: a GLB that 404s, fails
 to parse, or whose manifest fails `validateManifest()` drops to V2 *with the
@@ -127,9 +130,21 @@ active.
   `GarmentSpec` propagation through the fallback.
 - Web and iOS exports both succeed with the renderer present.
 
-## 7. What this decision does **not** claim
+## 7. Drawing on demand, not in a loop
 
-It does not claim the customer sees real 3D today. The engine is complete;
-the garment is missing. Until a professional GLB passes
-`src/render/visualAcceptance.ts`, `GARMENT_ASSETS` stays empty and every
-customer sees the V2 fallback.
+The renderer draws when something changes — camera, materials, tier, load —
+and not otherwise. `Real3DRenderer.invalidate()` marks the scene dirty and the
+GL surface coalesces that into exactly one `requestAnimationFrame`.
+
+This is not a micro-optimisation. The first implementation ran a permanent
+rAF loop, and on a software GL stack it kept the main thread busy enough that
+taps elsewhere in the app stopped landing — the full journey regression caught
+it as a screen that would not respond. A garment that is not moving is a still
+image; on a phone, redrawing it sixty times a second is battery for nothing.
+
+## 8. What this decision does **not** claim
+
+The customer now sees a real mesh, orbited by a real camera. It does **not**
+claim they see a professional garment: the asset behind it is a labelled
+prototype, `hasProfessionalAsset()` still returns false, and the 22-check
+visual acceptance gate is still unanswered.
